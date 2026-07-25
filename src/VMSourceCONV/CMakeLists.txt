@@ -41,6 +41,9 @@ set(VMSOURCECONV_SOURCES
     inspect/JsonReportWriter.cpp
     inspect/RerlInspector.cpp
     inspect/TextReportWriter.cpp
+    inspect/data/DataBlockInspector.cpp
+    inspect/data/DataFormatDetector.cpp
+    inspect/data/DataInspectionResult.cpp
 
     analyzing/AnalysisStage.cpp
     decision/DecisionStage.cpp
