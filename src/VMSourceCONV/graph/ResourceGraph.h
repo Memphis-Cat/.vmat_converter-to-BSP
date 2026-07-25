@@ -29,8 +29,22 @@ enum class ResourceNodeSource {
     VpkArchive,
 };
 
+enum class DependencyDisposition {
+    Resolved,
+    Missing,
+    Failed,
+    Repeated,
+    Cycle,
+    SelfReference,
+    Skipped,
+    Invalid,
+    DepthLimited,
+    ResourceLimited,
+};
+
 [[nodiscard]] const char* ToString(ResourceNodeStatus status) noexcept;
 [[nodiscard]] const char* ToString(ResourceNodeSource source) noexcept;
+[[nodiscard]] const char* ToString(DependencyDisposition disposition) noexcept;
 
 struct ResourceBlockSummary {
     std::string type;
@@ -56,6 +70,7 @@ struct ResourceGraphNode {
     std::optional<std::size_t> parentIndex;
     std::uint64_t referenceId = 0;
     std::string logicalName;
+    std::string identityKey;
     std::filesystem::path compiledRelativePath;
     std::filesystem::path resolvedPath;
     std::string vpkEntryPath;
@@ -78,10 +93,25 @@ struct ResourceGraphNode {
     std::size_t errorCount = 0;
 };
 
+struct ResourceGraphEdge {
+    std::size_t sourceNode = 0;
+    std::optional<std::size_t> targetNode;
+    std::uint64_t referenceId = 0;
+    std::string logicalName;
+    std::string identityKey;
+    DependencyDisposition disposition = DependencyDisposition::Resolved;
+    std::string message;
+};
+
 struct ResourceGraphStatistics {
     std::size_t referencesSeen = 0;
     std::size_t referencesSkipped = 0;
     std::size_t duplicateReferences = 0;
+    std::size_t repeatedEdges = 0;
+    std::size_t cycleEdges = 0;
+    std::size_t selfReferences = 0;
+    std::size_t invalidReferences = 0;
+    std::size_t referenceIdentityConflicts = 0;
     std::size_t depthLimitedReferences = 0;
     std::size_t resourcesLoaded = 0;
     std::size_t resourcesLoadedLoose = 0;
@@ -104,6 +134,7 @@ struct ResourceGraph {
     std::vector<std::filesystem::path> searchRoots;
     std::vector<std::filesystem::path> mountedVpks;
     std::vector<ResourceGraphNode> nodes;
+    std::vector<ResourceGraphEdge> edges;
     ResourceGraphStatistics statistics;
 };
 
