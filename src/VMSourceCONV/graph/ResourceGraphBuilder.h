@@ -18,6 +18,7 @@ public:
         const std::vector<std::filesystem::path>& resourceRoots,
         const std::vector<std::filesystem::path>& vpkPaths,
         bool includeAssets,
+        bool inspectData,
         std::size_t maximumDepth,
         std::size_t maximumResources,
         std::vector<core::Diagnostic>& diagnostics) const;
