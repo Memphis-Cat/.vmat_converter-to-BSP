@@ -17,6 +17,7 @@ set(VMSOURCECONV_SOURCES
 
     discovery/CompiledResourcePath.cpp
     discovery/ResourceLocator.cpp
+    discovery/VpkSearchPolicy.cpp
 
     vpk/VpkArchive.cpp
     vpk/VpkRepository.cpp
