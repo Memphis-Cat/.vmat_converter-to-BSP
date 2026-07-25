@@ -31,9 +31,7 @@ namespace {
         return false;
     }
     return std::equal(
-        suffix.rbegin(),
-        suffix.rend(),
-        value.rbegin(),
+        suffix.rbegin(), suffix.rend(), value.rbegin(),
         [](const unsigned char left, const unsigned char right) {
             return std::tolower(left) == std::tolower(right);
         });
@@ -86,9 +84,7 @@ void AddSceneDocument(
     InspectionReport& report) {
     try {
         scene::WorldSceneExtractor{}.AddDocument(
-            logicalName,
-            document,
-            report.worldScene);
+            logicalName, document, report.worldScene);
     } catch (const std::exception& error) {
         report.diagnostics.push_back({
             core::DiagnosticSeverity::Error,
@@ -103,15 +99,14 @@ void AddSceneDocument(
 
 InspectionReport Inspector::Run(const InspectOptions& options) const {
     InspectionReport report;
-    auto file = io::FileReader::ReadAll(options.input);
+    auto file = io::FileReader::ReadAll(
+        options.input, options.readLimits.maximumInputBytes);
     report.document = resource::ResourceParser{}.Parse(
-        std::move(file),
-        report.diagnostics);
+        std::move(file), report.diagnostics);
 
     if (options.inspectExternalReferences) {
         report.externalReferences = RerlInspector{}.Inspect(
-            report.document,
-            report.diagnostics);
+            report.document, report.diagnostics);
     }
 
     if (options.inspectData || options.decodeKv3 || options.decodeEntityLumps
@@ -126,8 +121,7 @@ InspectionReport Inspector::Run(const InspectOptions& options) const {
         || scene::WorldSceneExtractor::IsWorldNodeResource(rootFileName);
     const auto exportRoot = !options.kv3JsonDirectory.empty()
         && serialization::kv3::Kv3DocumentExporter::Matches(
-            rootLogicalName,
-            options.kv3Filters);
+            rootLogicalName, options.kv3Filters);
     const auto decodeRoot = options.decodeKv3
         || (options.decodeEntityLumps && rootIsEntityLump)
         || (options.reconstructScene && rootIsScene)
@@ -139,8 +133,7 @@ InspectionReport Inspector::Run(const InspectOptions& options) const {
         if (const auto* dataBlock = FindDataBlock(report.document)) {
             try {
                 auto document = serialization::kv3::BinaryKv3Decoder{}.Decode(
-                    report.document,
-                    *dataBlock);
+                    report.document, *dataBlock);
                 PopulateKv3Summary(document, report.rootKv3Decode);
 
                 if (exportRoot) {
@@ -179,40 +172,44 @@ InspectionReport Inspector::Run(const InspectOptions& options) const {
     }
 
     if (options.followReferences) {
+        graph::ResourceGraphBuildOptions graphOptions;
+        graphOptions.resourceRoots = options.resourceRoots;
+        graphOptions.overrideRoots = options.overrideRoots;
+        graphOptions.vpkPaths = options.vpkPaths;
+        graphOptions.includeAssets = options.includeAssets;
+        graphOptions.inspectData = options.inspectData;
+        graphOptions.decodeKv3 = options.decodeKv3;
+        graphOptions.decodeEntityLumps = options.decodeEntityLumps;
+        graphOptions.reconstructScene = options.reconstructScene;
+        graphOptions.reportVpkCollisions = options.reportVpkCollisions;
+        graphOptions.strictVpkCollisions = options.strictVpkCollisions;
+        graphOptions.kv3JsonDirectory = options.kv3JsonDirectory;
+        graphOptions.kv3Filters = options.kv3Filters;
+        graphOptions.maximumDepth = options.maximumDepth;
+        graphOptions.maximumResources = options.maximumResources;
+        graphOptions.readLimits = options.readLimits;
+        graphOptions.vpkReadOptions.verifyCrc = options.verifyVpkCrc;
+        graphOptions.vpkReadOptions.maximumEntrySize =
+            options.readLimits.maximumVpkEntryBytes;
         report.resourceGraph = graph::ResourceGraphBuilder{}.Build(
             options.input,
             report.externalReferences,
-            options.resourceRoots,
-            options.vpkPaths,
-            options.includeAssets,
-            options.inspectData,
-            options.decodeKv3,
-            options.decodeEntityLumps,
-            options.reconstructScene,
-            options.kv3JsonDirectory,
-            options.kv3Filters,
-            options.maximumDepth,
-            options.maximumResources,
+            graphOptions,
             report.diagnostics);
     }
 
     if (options.decodeEntityLumps) {
         if (rootIsEntityLump && report.rootKv3Document) {
             ExtractEntityLump(
-                rootLogicalName,
-                *report.rootKv3Document,
-                report);
+                rootLogicalName, *report.rootKv3Document, report);
         }
         for (const auto& node : report.resourceGraph.nodes) {
             if (node.kv3Document
                 && EndsWithIgnoreCase(node.logicalName, ".vents")) {
                 ExtractEntityLump(
-                    node.logicalName,
-                    *node.kv3Document,
-                    report);
+                    node.logicalName, *node.kv3Document, report);
             }
         }
-
         if (report.entityLumps.empty()) {
             report.diagnostics.push_back({
                 core::DiagnosticSeverity::Error,
@@ -226,9 +223,7 @@ InspectionReport Inspector::Run(const InspectOptions& options) const {
     if (options.reconstructScene) {
         if (rootIsScene && report.rootKv3Document) {
             AddSceneDocument(
-                rootLogicalName,
-                *report.rootKv3Document,
-                report);
+                rootLogicalName, *report.rootKv3Document, report);
         }
         for (const auto& node : report.resourceGraph.nodes) {
             if (node.kv3Document
@@ -236,9 +231,7 @@ InspectionReport Inspector::Run(const InspectOptions& options) const {
                     || scene::WorldSceneExtractor::IsWorldNodeResource(
                         node.logicalName))) {
                 AddSceneDocument(
-                    node.logicalName,
-                    *node.kv3Document,
-                    report);
+                    node.logicalName, *node.kv3Document, report);
             }
         }
         scene::WorldSceneExtractor{}.Finalize(report.worldScene);

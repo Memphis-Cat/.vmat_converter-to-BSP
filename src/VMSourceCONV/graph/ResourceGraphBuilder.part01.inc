@@ -1,28 +1,27 @@
 ResourceGraph ResourceGraphBuilder::Build(
     const std::filesystem::path& input,
     const std::vector<inspect::ExternalReference>& rootReferences,
-    const std::vector<std::filesystem::path>& resourceRoots,
-    const std::vector<std::filesystem::path>& vpkPaths,
-    const bool includeAssets,
-    const bool inspectData,
-    const bool decodeKv3,
-    const bool decodeEntityLumps,
-    const bool reconstructScene,
-    const std::filesystem::path& kv3JsonDirectory,
-    const std::vector<std::string>& kv3Filters,
-    const std::size_t maximumDepth,
-    const std::size_t maximumResources,
+    const ResourceGraphBuildOptions& options,
     std::vector<core::Diagnostic>& diagnostics) const {
     ResourceGraph graph;
     graph.enabled = true;
-    graph.includeAssets = includeAssets;
-    graph.maximumDepth = maximumDepth;
-    graph.maximumResources = maximumResources;
+    graph.includeAssets = options.includeAssets;
+    graph.maximumDepth = options.maximumDepth;
+    graph.maximumResources = options.maximumResources;
+    graph.maximumGraphBytes = options.readLimits.maximumGraphBytes;
 
-    const discovery::ResourceLocator locator(input, resourceRoots, vpkPaths);
-    graph.searchRoots = locator.SearchRoots();
-    graph.mountedVpks = locator.MountedVpks();
-    for (const auto& warning : locator.VpkWarnings()) {
+    const discovery::ResourceLocator locator(
+        input,
+        options.resourceRoots,
+        options.vpkPaths,
+        options.overrideRoots,
+        options.vpkReadOptions,
+        options.readLimits);
+    const discovery::IResourceProvider& provider = locator;
+    graph.overrideRoots = provider.OverrideRoots();
+    graph.searchRoots = provider.SearchRoots();
+    graph.mountedVpks = provider.MountedVpks();
+    for (const auto& warning : provider.VpkWarnings()) {
         diagnostics.push_back({
             core::DiagnosticSeverity::Warning,
             "VPK_MOUNT_WARNING",
@@ -44,6 +43,7 @@ ResourceGraph ResourceGraphBuilder::Build(
     rootNode.identityKey = rootIdentity->key;
     rootNode.compiledRelativePath = rootIdentity->compiledRelativePath;
     rootNode.resolvedPath = std::filesystem::absolute(input).lexically_normal();
+    rootNode.lookupTier = "input";
     rootNode.depth = 0;
     rootNode.status = ResourceNodeStatus::Loaded;
     rootNode.source = ResourceNodeSource::LooseFile;
@@ -52,6 +52,16 @@ ResourceGraph ResourceGraphBuilder::Build(
     rootNode.actualSize = std::filesystem::file_size(input, rootSizeError);
     if (rootSizeError) {
         rootNode.actualSize = 0;
+    }
+    graph.statistics.totalBytesLoaded = rootNode.actualSize;
+    if (graph.statistics.totalBytesLoaded > graph.maximumGraphBytes) {
+        graph.statistics.graphByteLimitReached = true;
+        diagnostics.push_back({
+            core::DiagnosticSeverity::Error,
+            "GRAPH_BYTE_LIMIT_REACHED",
+            "root resource alone exceeds the total graph byte limit",
+            std::nullopt,
+        });
     }
     graph.nodes.push_back(std::move(rootNode));
 
@@ -65,7 +75,7 @@ ResourceGraph ResourceGraphBuilder::Build(
         0U,
         1U,
         {rootIdentity->key},
-        includeAssets,
+        options.includeAssets,
         pending,
         graph,
         idToKey,
@@ -73,12 +83,13 @@ ResourceGraph ResourceGraphBuilder::Build(
         diagnostics);
 
     bool resourceLimitReported = false;
+    bool byteLimitReported = graph.statistics.graphByteLimitReached;
     while (!pending.empty()) {
         auto current = std::move(pending.front());
         pending.pop_front();
         auto& edge = graph.edges.at(current.edgeIndex);
 
-        if (current.depth > maximumDepth) {
+        if (current.depth > options.maximumDepth) {
             edge.disposition = DependencyDisposition::DepthLimited;
             edge.message = "maximum dependency depth reached";
             ++graph.statistics.depthLimitedReferences;
@@ -110,7 +121,7 @@ ResourceGraph ResourceGraphBuilder::Build(
             continue;
         }
 
-        if (graph.nodes.size() >= maximumResources) {
+        if (graph.nodes.size() >= options.maximumResources) {
             edge.disposition = DependencyDisposition::ResourceLimited;
             edge.message = "maximum resource count reached";
             graph.statistics.resourceLimitReached = true;
@@ -137,7 +148,32 @@ ResourceGraph ResourceGraphBuilder::Build(
         edge.targetNode = node.index;
         visited.emplace(current.identity.key, node.index);
 
-        const auto location = locator.Locate(current.identity.logicalName);
+        const auto location = provider.Locate(current.identity.logicalName);
+        node.lookupTier = discovery::ToString(location.tier);
+        node.shadowedVpks = location.shadowedVpks;
+        if (!location.shadowedVpks.empty()) {
+            ++graph.statistics.vpkCollisionCount;
+            graph.vpkCollisions.push_back({
+                node.logicalName,
+                location.resolvedPath,
+                node.lookupTier,
+                location.shadowedVpks,
+            });
+            if (options.reportVpkCollisions || options.strictVpkCollisions) {
+                diagnostics.push_back({
+                    options.strictVpkCollisions
+                        ? core::DiagnosticSeverity::Error
+                        : core::DiagnosticSeverity::Warning,
+                    "VPK_RESOURCE_COLLISION",
+                    node.logicalName + " selected "
+                        + location.resolvedPath.string() + " and shadowed "
+                        + std::to_string(location.shadowedVpks.size())
+                        + " exact match(es)",
+                    std::nullopt,
+                });
+            }
+        }
+
         if (!location.Found()) {
             node.status = ResourceNodeStatus::Missing;
             node.message = location.error;
@@ -165,54 +201,76 @@ ResourceGraph ResourceGraphBuilder::Build(
         std::vector<inspect::ExternalReference> childReferences;
         try {
             std::vector<core::Diagnostic> localDiagnostics;
-            auto file = locator.Read(location);
-            auto document = resource::ResourceParser{}.Parse(
-                std::move(file), localDiagnostics);
-            childReferences = inspect::RerlInspector{}.Inspect(
-                document, localDiagnostics);
-
-            if (inspectData || decodeKv3 || decodeEntityLumps
-                || reconstructScene || !kv3JsonDirectory.empty()) {
-                node.dataInspection =
-                    inspect::data::DataBlockInspector{}.Inspect(document);
-            }
-            DecodeKv3IfRequested(
-                node.logicalName,
-                decodeKv3,
-                decodeEntityLumps,
-                reconstructScene,
-                kv3JsonDirectory,
-                kv3Filters,
-                document,
-                node,
-                graph.statistics,
-                diagnostics);
-
-            node.status = ResourceNodeStatus::Loaded;
-            node.actualSize = document.file.bytes.size();
-            node.declaredFileSize = document.header.declaredFileSize;
-            node.headerVersion = document.header.headerVersion;
-            node.resourceVersion = document.header.resourceVersion;
-            node.externalReferenceCount = childReferences.size();
-            node.warningCount = CountSeverity(
-                localDiagnostics, core::DiagnosticSeverity::Warning);
-            node.errorCount = CountSeverity(
-                localDiagnostics, core::DiagnosticSeverity::Error);
-            node.blocks.reserve(document.blocks.size());
-            for (const auto& block : document.blocks) {
-                node.blocks.push_back({
-                    block.type.ToString(), block.offset, block.size,
-                });
-            }
-
-            AppendDiagnostics(node.logicalName, localDiagnostics, diagnostics);
-            ++graph.statistics.resourcesLoaded;
-            if (node.source == ResourceNodeSource::VpkArchive) {
-                ++graph.statistics.resourcesLoadedFromVpk;
+            auto file = provider.Read(location);
+            const auto fileSize = static_cast<std::uint64_t>(file.bytes.size());
+            if (fileSize > graph.maximumGraphBytes
+                || graph.statistics.totalBytesLoaded
+                    > graph.maximumGraphBytes - fileSize) {
+                graph.statistics.graphByteLimitReached = true;
+                node.status = ResourceNodeStatus::Limited;
+                node.message = "total graph byte limit reached before parsing";
+                edge.disposition = DependencyDisposition::ResourceLimited;
+                edge.message = node.message;
+                if (!byteLimitReported) {
+                    diagnostics.push_back({
+                        core::DiagnosticSeverity::Warning,
+                        "GRAPH_BYTE_LIMIT_REACHED",
+                        "dependency traversal reached the total graph byte limit",
+                        std::nullopt,
+                    });
+                    byteLimitReported = true;
+                }
             } else {
-                ++graph.statistics.resourcesLoadedLoose;
+                graph.statistics.totalBytesLoaded += fileSize;
+                auto document = resource::ResourceParser{}.Parse(
+                    std::move(file), localDiagnostics);
+                childReferences = inspect::RerlInspector{}.Inspect(
+                    document, localDiagnostics);
+
+                if (options.inspectData || options.decodeKv3
+                    || options.decodeEntityLumps || options.reconstructScene
+                    || !options.kv3JsonDirectory.empty()) {
+                    node.dataInspection =
+                        inspect::data::DataBlockInspector{}.Inspect(document);
+                }
+                DecodeKv3IfRequested(
+                    node.logicalName,
+                    options.decodeKv3,
+                    options.decodeEntityLumps,
+                    options.reconstructScene,
+                    options.kv3JsonDirectory,
+                    options.kv3Filters,
+                    document,
+                    node,
+                    graph.statistics,
+                    diagnostics);
+
+                node.status = ResourceNodeStatus::Loaded;
+                node.actualSize = document.file.bytes.size();
+                node.declaredFileSize = document.header.declaredFileSize;
+                node.headerVersion = document.header.headerVersion;
+                node.resourceVersion = document.header.resourceVersion;
+                node.externalReferenceCount = childReferences.size();
+                node.warningCount = CountSeverity(
+                    localDiagnostics, core::DiagnosticSeverity::Warning);
+                node.errorCount = CountSeverity(
+                    localDiagnostics, core::DiagnosticSeverity::Error);
+                node.blocks.reserve(document.blocks.size());
+                for (const auto& block : document.blocks) {
+                    node.blocks.push_back({
+                        block.type.ToString(), block.offset, block.size,
+                    });
+                }
+
+                AppendDiagnostics(node.logicalName, localDiagnostics, diagnostics);
+                ++graph.statistics.resourcesLoaded;
+                if (node.source == ResourceNodeSource::VpkArchive) {
+                    ++graph.statistics.resourcesLoadedFromVpk;
+                } else {
+                    ++graph.statistics.resourcesLoadedLoose;
+                }
+                edge.disposition = DependencyDisposition::Resolved;
             }
-            edge.disposition = DependencyDisposition::Resolved;
         } catch (const core::ParseError& error) {
             node.status = ResourceNodeStatus::ParseError;
             node.message = error.what();
@@ -252,7 +310,7 @@ ResourceGraph ResourceGraphBuilder::Build(
                 nodeIndex,
                 current.depth + 1U,
                 ancestry,
-                includeAssets,
+                options.includeAssets,
                 pending,
                 graph,
                 idToKey,

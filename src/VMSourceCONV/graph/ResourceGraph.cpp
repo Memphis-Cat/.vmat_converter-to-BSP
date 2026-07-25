@@ -8,6 +8,7 @@ const char* ToString(const ResourceNodeStatus status) noexcept {
         case ResourceNodeStatus::Missing: return "missing";
         case ResourceNodeStatus::ParseError: return "parse-error";
         case ResourceNodeStatus::IoError: return "io-error";
+        case ResourceNodeStatus::Limited: return "limited";
     }
     return "unknown";
 }

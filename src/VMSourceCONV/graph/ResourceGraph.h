@@ -16,19 +16,8 @@ struct Kv3Document;
 
 namespace vmsourceconv::graph {
 
-enum class ResourceNodeStatus {
-    Loaded,
-    Missing,
-    ParseError,
-    IoError,
-};
-
-enum class ResourceNodeSource {
-    None,
-    LooseFile,
-    VpkArchive,
-};
-
+enum class ResourceNodeStatus { Loaded, Missing, ParseError, IoError, Limited };
+enum class ResourceNodeSource { None, LooseFile, VpkArchive };
 enum class DependencyDisposition {
     Resolved,
     Missing,
@@ -74,6 +63,8 @@ struct ResourceGraphNode {
     std::filesystem::path compiledRelativePath;
     std::filesystem::path resolvedPath;
     std::string vpkEntryPath;
+    std::string lookupTier;
+    std::vector<std::filesystem::path> shadowedVpks;
     std::size_t depth = 0;
     ResourceNodeStatus status = ResourceNodeStatus::Missing;
     ResourceNodeSource source = ResourceNodeSource::None;
@@ -103,6 +94,13 @@ struct ResourceGraphEdge {
     std::string message;
 };
 
+struct VpkCollisionSummary {
+    std::string logicalName;
+    std::filesystem::path selectedPath;
+    std::string selectedTier;
+    std::vector<std::filesystem::path> shadowedPaths;
+};
+
 struct ResourceGraphStatistics {
     std::size_t referencesSeen = 0;
     std::size_t referencesSkipped = 0;
@@ -112,18 +110,21 @@ struct ResourceGraphStatistics {
     std::size_t selfReferences = 0;
     std::size_t invalidReferences = 0;
     std::size_t referenceIdentityConflicts = 0;
+    std::size_t vpkCollisionCount = 0;
     std::size_t depthLimitedReferences = 0;
     std::size_t resourcesLoaded = 0;
     std::size_t resourcesLoadedLoose = 0;
     std::size_t resourcesLoadedFromVpk = 0;
     std::size_t resourcesMissing = 0;
     std::size_t resourcesFailed = 0;
+    std::uint64_t totalBytesLoaded = 0;
     std::size_t kv3DocumentsDecoded = 0;
     std::size_t kv3DocumentsFailed = 0;
     std::size_t kv3DocumentsExported = 0;
     std::size_t entityDocumentsRetained = 0;
     std::size_t sceneDocumentsRetained = 0;
     bool resourceLimitReached = false;
+    bool graphByteLimitReached = false;
 };
 
 struct ResourceGraph {
@@ -131,10 +132,13 @@ struct ResourceGraph {
     bool includeAssets = false;
     std::size_t maximumDepth = 0;
     std::size_t maximumResources = 0;
+    std::uint64_t maximumGraphBytes = 0;
+    std::vector<std::filesystem::path> overrideRoots;
     std::vector<std::filesystem::path> searchRoots;
     std::vector<std::filesystem::path> mountedVpks;
     std::vector<ResourceGraphNode> nodes;
     std::vector<ResourceGraphEdge> edges;
+    std::vector<VpkCollisionSummary> vpkCollisions;
     ResourceGraphStatistics statistics;
 };
 

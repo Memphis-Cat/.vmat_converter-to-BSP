@@ -1,0 +1,9 @@
+add_executable(VMSourceCONVFoundationTests
+    FoundationTests.cpp
+)
+
+target_compile_features(VMSourceCONVFoundationTests PRIVATE cxx_std_17)
+target_link_libraries(VMSourceCONVFoundationTests PRIVATE vmsourceconv_core)
+vmsourceconv_apply_warnings(VMSourceCONVFoundationTests)
+
+add_test(NAME foundation COMMAND VMSourceCONVFoundationTests)
