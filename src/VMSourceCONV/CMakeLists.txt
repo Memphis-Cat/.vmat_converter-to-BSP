@@ -15,6 +15,10 @@ set(VMSOURCECONV_SOURCES
     io/FileReader.cpp
     io/PathUtils.cpp
 
+    compression/CompressionError.cpp
+    compression/Lz4Decoder.cpp
+    compression/ZstdDecoder.cpp
+
     discovery/CompiledResourcePath.cpp
     discovery/ResourceLocator.cpp
     discovery/VpkSearchPolicy.cpp
@@ -45,6 +49,20 @@ set(VMSOURCECONV_SOURCES
     inspect/data/DataFormatDetector.cpp
     inspect/data/DataInspectionResult.cpp
 
+    serialization/kv3/BinaryKv3Decoder.cpp
+    serialization/kv3/BinaryKv3Header.cpp
+    serialization/kv3/BinaryKv3HeaderReader.cpp
+    serialization/kv3/BinaryKv3Magic.cpp
+    serialization/kv3/Kv3Buffer.cpp
+    serialization/kv3/Kv3Compression.cpp
+    serialization/kv3/Kv3JsonWriter.cpp
+    serialization/kv3/Kv3NodeType.cpp
+    serialization/kv3/Kv3PayloadDecoder.cpp
+    serialization/kv3/Kv3Value.cpp
+
+    entities/EntityLumpExport.cpp
+    entities/EntityLumpJsonWriter.cpp
+
     analyzing/AnalysisStage.cpp
     decision/DecisionStage.cpp
     convert/ConversionStage.cpp
@@ -56,6 +74,7 @@ set(VMSOURCECONV_SOURCES
 add_executable(VMSourceCONV ${VMSOURCECONV_SOURCES})
 target_compile_features(VMSourceCONV PRIVATE cxx_std_17)
 target_include_directories(VMSourceCONV PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(VMSourceCONV PRIVATE vmsourceconv_compression)
 
 if(MSVC)
     target_compile_options(VMSourceCONV PRIVATE /W4 /permissive- /EHsc)
