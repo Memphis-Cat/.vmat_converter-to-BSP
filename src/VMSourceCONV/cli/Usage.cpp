@@ -12,6 +12,7 @@ void PrintUsage(std::ostream& output) {
         << "Inspect options:\n"
         << "  --json <file>            Write a machine-readable report.\n"
         << "  --dump-blocks <dir>      Dump every valid root-resource block.\n"
+        << "  --inspect-data           Classify DATA blocks and show byte previews.\n"
         << "  --resource-root <dir>    Add a loose content search root.\n"
         << "                           A matching map VPK is selected automatically.\n"
         << "  --vpk <file-or-dir>      Select the primary VPK package or directory.\n"
@@ -32,9 +33,10 @@ void PrintUsage(std::ostream& output) {
         << "  2. Explicit --vpk packages and a matching map package.\n"
         << "  3. The recursive ./vpk fallback library, pak01_dir.vpk first.\n\n"
         << "Examples:\n"
-        << "  VMSourceCONV inspect de_cache.vmap_c --follow-references --logs.txt\n"
+        << "  VMSourceCONV inspect de_cache.vmap_c --follow-references "
+           "--inspect-data --logs.txt\n"
         << "  VMSourceCONV inspect de_cache.vmap_c --vpk D:\\cache-package "
-           "--follow-references --log cache-log.txt\n";
+           "--follow-references --inspect-data --log cache-data.txt\n";
 }
 
 } // namespace vmsourceconv::cli
