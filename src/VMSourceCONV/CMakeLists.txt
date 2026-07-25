@@ -13,6 +13,9 @@ set(VMSOURCECONV_SOURCES
     io/FileReader.cpp
     io/PathUtils.cpp
 
+    discovery/CompiledResourcePath.cpp
+    discovery/ResourceLocator.cpp
+
     resource/FourCC.cpp
     resource/RelativeOffset.cpp
     resource/ResourceBlock.cpp
@@ -20,6 +23,10 @@ set(VMSOURCECONV_SOURCES
     resource/ResourceHeader.cpp
     resource/ResourceParser.cpp
     resource/ResourceValidator.cpp
+
+    graph/DependencyFilter.cpp
+    graph/ResourceGraph.cpp
+    graph/ResourceGraphBuilder.cpp
 
     inspect/BlockDumper.cpp
     inspect/InspectionReport.cpp

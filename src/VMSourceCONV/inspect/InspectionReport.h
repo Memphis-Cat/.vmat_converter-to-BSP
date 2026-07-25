@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Diagnostic.h"
+#include "graph/ResourceGraph.h"
 #include "resource/ResourceDocument.h"
 
 #include <cstddef>
@@ -20,6 +21,7 @@ struct ExternalReference {
 struct InspectionReport {
     resource::ResourceDocument document;
     std::vector<ExternalReference> externalReferences;
+    graph::ResourceGraph resourceGraph;
     std::vector<core::Diagnostic> diagnostics;
 
     [[nodiscard]] std::size_t WarningCount() const noexcept;

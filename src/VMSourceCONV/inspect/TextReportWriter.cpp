@@ -1,6 +1,7 @@
 #include "inspect/TextReportWriter.h"
 
 #include "core/Diagnostic.h"
+#include "graph/ResourceGraph.h"
 
 #include <iomanip>
 #include <ostream>
@@ -9,12 +10,15 @@ namespace vmsourceconv::inspect {
 namespace {
 
 void WriteHex(std::ostream& output, const std::size_t value) {
-    output << "0x" << std::uppercase << std::hex << value << std::dec << std::nouppercase;
+    output << "0x" << std::uppercase << std::hex << value
+           << std::dec << std::nouppercase;
 }
 
 } // namespace
 
-void TextReportWriter::Write(const InspectionReport& report, std::ostream& output) const {
+void TextReportWriter::Write(
+    const InspectionReport& report,
+    std::ostream& output) const {
     const auto& document = report.document;
     const auto& header = document.header;
 
@@ -31,7 +35,8 @@ void TextReportWriter::Write(const InspectionReport& report, std::ostream& outpu
     output << "\n\nBlocks\n------\n";
 
     for (const auto& block : document.blocks) {
-        output << '[' << block.index << "] " << block.type.ToString() << " offset=";
+        output << '[' << block.index << "] " << block.type.ToString()
+               << " offset=";
         WriteHex(output, block.offset);
         output << " size=" << block.size << " bytes entry=";
         WriteHex(output, block.directoryEntryOffset);
@@ -43,10 +48,76 @@ void TextReportWriter::Write(const InspectionReport& report, std::ostream& outpu
         output << "(none decoded)\n";
     } else {
         for (const auto& reference : report.externalReferences) {
-            output << "0x" << std::uppercase << std::hex << std::setw(16) << std::setfill('0')
-                   << reference.id << std::dec << std::nouppercase << std::setfill(' ')
-                   << "  " << reference.name << '\n';
+            output << "0x" << std::uppercase << std::hex
+                   << std::setw(16) << std::setfill('0')
+                   << reference.id << std::dec << std::nouppercase
+                   << std::setfill(' ') << "  " << reference.name << '\n';
         }
+    }
+
+    if (report.resourceGraph.enabled) {
+        const auto& resourceGraph = report.resourceGraph;
+        const auto& statistics = resourceGraph.statistics;
+
+        output << "\nResource graph\n--------------\n"
+               << "Mode: "
+               << (resourceGraph.includeAssets
+                       ? "all referenced resources"
+                       : "structural map resources")
+               << '\n'
+               << "Maximum depth: " << resourceGraph.maximumDepth << '\n'
+               << "Maximum resources: " << resourceGraph.maximumResources << '\n'
+               << "Search roots:\n";
+
+        for (const auto& root : resourceGraph.searchRoots) {
+            output << "  " << root.string() << '\n';
+        }
+
+        output << "\nResolved resources:\n";
+        if (resourceGraph.nodes.empty()) {
+            output << "(none)\n";
+        } else {
+            for (const auto& node : resourceGraph.nodes) {
+                output << '[' << node.index << "] depth=" << node.depth
+                       << " status=" << graph::ToString(node.status)
+                       << " " << node.logicalName;
+
+                if (!node.resolvedPath.empty()) {
+                    output << "\n    file=" << node.resolvedPath.string()
+                           << " size=" << node.actualSize
+                           << " blocks=" << node.blocks.size()
+                           << " references=" << node.externalReferenceCount;
+                }
+
+                if (node.parentIndex.has_value()) {
+                    output << "\n    parent=" << *node.parentIndex;
+                }
+
+                if (!node.message.empty()) {
+                    output << "\n    message=" << node.message;
+                }
+
+                output << '\n';
+            }
+        }
+
+        output << "\nGraph summary:\n"
+               << "  references seen: " << statistics.referencesSeen << '\n'
+               << "  references skipped: "
+               << statistics.referencesSkipped << '\n'
+               << "  duplicate references: "
+               << statistics.duplicateReferences << '\n'
+               << "  depth-limited references: "
+               << statistics.depthLimitedReferences << '\n'
+               << "  resources loaded: "
+               << statistics.resourcesLoaded << '\n'
+               << "  resources missing: "
+               << statistics.resourcesMissing << '\n'
+               << "  resources failed: "
+               << statistics.resourcesFailed << '\n'
+               << "  resource limit reached: "
+               << (statistics.resourceLimitReached ? "yes" : "no")
+               << '\n';
     }
 
     output << "\nDiagnostics\n-----------\n";
@@ -54,7 +125,8 @@ void TextReportWriter::Write(const InspectionReport& report, std::ostream& outpu
         output << "No diagnostics.\n";
     } else {
         for (const auto& diagnostic : report.diagnostics) {
-            output << core::ToString(diagnostic.severity) << " [" << diagnostic.code << "] ";
+            output << core::ToString(diagnostic.severity)
+                   << " [" << diagnostic.code << "] ";
             if (diagnostic.offset.has_value()) {
                 WriteHex(output, *diagnostic.offset);
                 output << ": ";

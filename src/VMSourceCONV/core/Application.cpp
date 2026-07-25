@@ -26,11 +26,12 @@ int Application::Run(const int argc, char** argv) const {
         }
 
         if (commandLine.showVersion) {
-            std::cout << "VMSourceCONV 0.1.0\n";
+            std::cout << "VMSourceCONV 0.2.0\n";
             return static_cast<int>(ExitCode::Success);
         }
 
-        return static_cast<int>(cli::CommandRouter{}.Execute(commandLine));
+        return static_cast<int>(
+            cli::CommandRouter{}.Execute(commandLine));
     } catch (const std::exception& exception) {
         std::cerr << "fatal: " << exception.what() << '\n';
         return static_cast<int>(ExitCode::InternalError);
