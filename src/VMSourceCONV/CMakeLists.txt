@@ -90,6 +90,12 @@ function(vmsourceconv_apply_warnings target_name)
     else()
         target_compile_options(${target_name} PRIVATE
             -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            # Clang folds signed-char range conversion into -Wconversion,
+            # unlike GCC. These loops immediately cast to unsigned char before
+            # ctype/byte processing, so align the two compiler warning sets.
+            target_compile_options(${target_name} PRIVATE -Wno-sign-conversion)
+        endif()
         if(VMSOURCECONV_WARNINGS_AS_ERRORS)
             target_compile_options(${target_name} PRIVATE -Werror)
         endif()
