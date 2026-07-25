@@ -16,6 +16,7 @@ struct InspectOptions {
     std::size_t maximumDepth = 4;
     std::size_t maximumResources = 512;
     bool inspectExternalReferences = true;
+    bool inspectData = false;
     bool followReferences = false;
     bool includeAssets = false;
     bool strict = false;
