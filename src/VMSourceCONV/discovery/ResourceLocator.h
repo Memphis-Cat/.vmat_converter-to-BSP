@@ -23,6 +23,7 @@ struct ResourceLocation {
     std::vector<std::filesystem::path> candidates;
     ResourceSource source = ResourceSource::Missing;
     vpk::VpkMatch vpkMatch;
+    bool fromFallbackVpk = false;
     std::string error;
 
     [[nodiscard]] bool Found() const noexcept {
@@ -47,7 +48,9 @@ private:
     void AddRoot(const std::filesystem::path& root);
 
     std::vector<std::filesystem::path> roots_;
-    vpk::VpkRepository vpks_;
+    vpk::VpkRepository primaryVpks_;
+    vpk::VpkRepository fallbackVpks_;
+    std::vector<std::string> vpkWarnings_;
 };
 
 } // namespace vmsourceconv::discovery
