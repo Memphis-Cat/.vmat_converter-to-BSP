@@ -10,7 +10,9 @@ struct InspectOptions {
     std::filesystem::path input;
     std::filesystem::path jsonOutput;
     std::filesystem::path dumpDirectory;
+    std::filesystem::path logOutput;
     std::vector<std::filesystem::path> resourceRoots;
+    std::vector<std::filesystem::path> vpkPaths;
     std::size_t maximumDepth = 4;
     std::size_t maximumResources = 512;
     bool inspectExternalReferences = true;

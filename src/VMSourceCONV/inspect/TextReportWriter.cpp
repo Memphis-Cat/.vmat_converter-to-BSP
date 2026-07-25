@@ -73,6 +73,15 @@ void TextReportWriter::Write(
             output << "  " << root.string() << '\n';
         }
 
+        output << "Mounted VPKs:\n";
+        if (resourceGraph.mountedVpks.empty()) {
+            output << "  (none)\n";
+        } else {
+            for (const auto& path : resourceGraph.mountedVpks) {
+                output << "  " << path.string() << '\n';
+            }
+        }
+
         output << "\nResolved resources:\n";
         if (resourceGraph.nodes.empty()) {
             output << "(none)\n";
@@ -80,11 +89,18 @@ void TextReportWriter::Write(
             for (const auto& node : resourceGraph.nodes) {
                 output << '[' << node.index << "] depth=" << node.depth
                        << " status=" << graph::ToString(node.status)
-                       << " " << node.logicalName;
+                       << " source=" << graph::ToString(node.source)
+                       << ' ' << node.logicalName;
 
-                if (!node.resolvedPath.empty()) {
-                    output << "\n    file=" << node.resolvedPath.string()
-                           << " size=" << node.actualSize
+                if (node.source == graph::ResourceNodeSource::LooseFile) {
+                    output << "\n    file=" << node.resolvedPath.string();
+                } else if (node.source == graph::ResourceNodeSource::VpkArchive) {
+                    output << "\n    archive=" << node.resolvedPath.string()
+                           << "\n    entry=" << node.vpkEntryPath;
+                }
+
+                if (node.status == graph::ResourceNodeStatus::Loaded) {
+                    output << "\n    size=" << node.actualSize
                            << " blocks=" << node.blocks.size()
                            << " references=" << node.externalReferenceCount;
                 }
@@ -111,6 +127,10 @@ void TextReportWriter::Write(
                << statistics.depthLimitedReferences << '\n'
                << "  resources loaded: "
                << statistics.resourcesLoaded << '\n'
+               << "  loaded from loose files: "
+               << statistics.resourcesLoadedLoose << '\n'
+               << "  loaded from VPKs: "
+               << statistics.resourcesLoadedFromVpk << '\n'
                << "  resources missing: "
                << statistics.resourcesMissing << '\n'
                << "  resources failed: "

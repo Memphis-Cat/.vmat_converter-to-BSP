@@ -16,7 +16,14 @@ enum class ResourceNodeStatus {
     IoError,
 };
 
+enum class ResourceNodeSource {
+    None,
+    LooseFile,
+    VpkArchive,
+};
+
 [[nodiscard]] const char* ToString(ResourceNodeStatus status) noexcept;
+[[nodiscard]] const char* ToString(ResourceNodeSource source) noexcept;
 
 struct ResourceBlockSummary {
     std::string type;
@@ -31,8 +38,10 @@ struct ResourceGraphNode {
     std::string logicalName;
     std::filesystem::path compiledRelativePath;
     std::filesystem::path resolvedPath;
+    std::string vpkEntryPath;
     std::size_t depth = 0;
     ResourceNodeStatus status = ResourceNodeStatus::Missing;
+    ResourceNodeSource source = ResourceNodeSource::None;
     std::string message;
 
     std::uintmax_t actualSize = 0;
@@ -51,6 +60,8 @@ struct ResourceGraphStatistics {
     std::size_t duplicateReferences = 0;
     std::size_t depthLimitedReferences = 0;
     std::size_t resourcesLoaded = 0;
+    std::size_t resourcesLoadedLoose = 0;
+    std::size_t resourcesLoadedFromVpk = 0;
     std::size_t resourcesMissing = 0;
     std::size_t resourcesFailed = 0;
     bool resourceLimitReached = false;
@@ -62,6 +73,7 @@ struct ResourceGraph {
     std::size_t maximumDepth = 0;
     std::size_t maximumResources = 0;
     std::vector<std::filesystem::path> searchRoots;
+    std::vector<std::filesystem::path> mountedVpks;
     std::vector<ResourceGraphNode> nodes;
     ResourceGraphStatistics statistics;
 };

@@ -17,4 +17,17 @@ const char* ToString(const ResourceNodeStatus status) noexcept {
     return "unknown";
 }
 
+const char* ToString(const ResourceNodeSource source) noexcept {
+    switch (source) {
+        case ResourceNodeSource::None:
+            return "none";
+        case ResourceNodeSource::LooseFile:
+            return "loose-file";
+        case ResourceNodeSource::VpkArchive:
+            return "vpk";
+    }
+
+    return "unknown";
+}
+
 } // namespace vmsourceconv::graph

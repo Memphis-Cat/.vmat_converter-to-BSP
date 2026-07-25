@@ -1,5 +1,6 @@
 #include "inspect/InspectCommand.h"
 
+#include "core/LogSession.h"
 #include "core/ParseError.h"
 #include "inspect/BlockDumper.h"
 #include "inspect/Inspector.h"
@@ -14,6 +15,11 @@ namespace vmsourceconv::inspect {
 
 core::ExitCode InspectCommand::Execute(const InspectOptions& options) const {
     try {
+        core::LogSession logSession(options.logOutput);
+        if (!options.logOutput.empty()) {
+            std::cout << "Log file: " << options.logOutput.string() << "\n\n";
+        }
+
         const auto report = Inspector{}.Run(options);
         TextReportWriter{}.Write(report, std::cout);
 
@@ -25,14 +31,15 @@ core::ExitCode InspectCommand::Execute(const InspectOptions& options) const {
             BlockDumper{}.Dump(report.document, options.dumpDirectory);
         }
 
-        if (report.ErrorCount() != 0 || (options.strict && report.WarningCount() != 0)) {
+        if (report.ErrorCount() != 0
+            || (options.strict && report.WarningCount() != 0)) {
             return core::ExitCode::ParseError;
         }
 
         return core::ExitCode::Success;
     } catch (const core::ParseError& error) {
-        std::cerr << "parse error at 0x" << std::hex << error.Offset() << std::dec
-                  << ": " << error.what() << '\n';
+        std::cerr << "parse error at 0x" << std::hex << error.Offset()
+                  << std::dec << ": " << error.what() << '\n';
         return core::ExitCode::ParseError;
     } catch (const std::filesystem::filesystem_error& error) {
         std::cerr << "filesystem error: " << error.what() << '\n';

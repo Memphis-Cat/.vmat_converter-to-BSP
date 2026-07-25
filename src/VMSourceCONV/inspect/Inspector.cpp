@@ -25,6 +25,7 @@ InspectionReport Inspector::Run(const InspectOptions& options) const {
             options.input,
             report.externalReferences,
             options.resourceRoots,
+            options.vpkPaths,
             options.includeAssets,
             options.maximumDepth,
             options.maximumResources,

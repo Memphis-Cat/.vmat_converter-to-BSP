@@ -7,7 +7,9 @@ set(VMSOURCECONV_SOURCES
 
     core/Application.cpp
     core/Diagnostic.cpp
+    core/LogSession.cpp
     core/ParseError.cpp
+    core/TeeStreamBuf.cpp
 
     io/BinaryReader.cpp
     io/FileReader.cpp
@@ -15,6 +17,9 @@ set(VMSOURCECONV_SOURCES
 
     discovery/CompiledResourcePath.cpp
     discovery/ResourceLocator.cpp
+
+    vpk/VpkArchive.cpp
+    vpk/VpkRepository.cpp
 
     resource/FourCC.cpp
     resource/RelativeOffset.cpp

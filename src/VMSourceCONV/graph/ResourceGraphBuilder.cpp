@@ -5,7 +5,6 @@
 #include "discovery/ResourceLocator.h"
 #include "graph/DependencyFilter.h"
 #include "inspect/RerlInspector.h"
-#include "io/FileReader.h"
 #include "resource/ResourceParser.h"
 
 #include <deque>
@@ -72,6 +71,7 @@ ResourceGraph ResourceGraphBuilder::Build(
     const std::filesystem::path& input,
     const std::vector<inspect::ExternalReference>& rootReferences,
     const std::vector<std::filesystem::path>& resourceRoots,
+    const std::vector<std::filesystem::path>& vpkPaths,
     const bool includeAssets,
     const std::size_t maximumDepth,
     const std::size_t maximumResources,
@@ -82,8 +82,21 @@ ResourceGraph ResourceGraphBuilder::Build(
     graph.maximumDepth = maximumDepth;
     graph.maximumResources = maximumResources;
 
-    const discovery::ResourceLocator locator(input, resourceRoots);
+    const discovery::ResourceLocator locator(
+        input,
+        resourceRoots,
+        vpkPaths);
     graph.searchRoots = locator.SearchRoots();
+    graph.mountedVpks = locator.MountedVpks();
+
+    for (const auto& warning : locator.VpkWarnings()) {
+        diagnostics.push_back({
+            core::DiagnosticSeverity::Warning,
+            "VPK_MOUNT_WARNING",
+            warning,
+            std::nullopt,
+        });
+    }
 
     std::deque<PendingReference> pending;
     EnqueueReferences(
@@ -151,11 +164,18 @@ ResourceGraph ResourceGraphBuilder::Build(
         }
 
         node.resolvedPath = location.resolvedPath;
+        if (location.source == discovery::ResourceSource::LooseFile) {
+            node.source = ResourceNodeSource::LooseFile;
+        } else if (location.source == discovery::ResourceSource::VpkArchive) {
+            node.source = ResourceNodeSource::VpkArchive;
+            node.vpkEntryPath = location.vpkMatch.entryPath;
+        }
+
         std::vector<inspect::ExternalReference> childReferences;
 
         try {
             std::vector<core::Diagnostic> localDiagnostics;
-            auto file = io::FileReader::ReadAll(node.resolvedPath);
+            auto file = locator.Read(location);
             auto document = resource::ResourceParser{}.Parse(
                 std::move(file),
                 localDiagnostics);
@@ -188,6 +208,11 @@ ResourceGraph ResourceGraphBuilder::Build(
 
             AppendDiagnostics(logicalName, localDiagnostics, diagnostics);
             ++graph.statistics.resourcesLoaded;
+            if (node.source == ResourceNodeSource::VpkArchive) {
+                ++graph.statistics.resourcesLoadedFromVpk;
+            } else {
+                ++graph.statistics.resourcesLoadedLoose;
+            }
         } catch (const core::ParseError& error) {
             node.status = ResourceNodeStatus::ParseError;
             node.message = error.what();

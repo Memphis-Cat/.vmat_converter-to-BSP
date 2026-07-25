@@ -38,6 +38,18 @@ void WriteEscaped(std::ostream& output, const std::string_view value) {
     output << '"';
 }
 
+void WritePathArray(
+    const std::vector<std::filesystem::path>& paths,
+    std::ostream& output,
+    const std::string_view indentation) {
+    output << '[';
+    for (std::size_t index = 0; index < paths.size(); ++index) {
+        output << (index == 0 ? "\n" : ",\n") << indentation;
+        WriteEscaped(output, paths[index].string());
+    }
+    output << (paths.empty() ? "]" : "\n    ]");
+}
+
 void WriteResourceGraph(
     const graph::ResourceGraph& resourceGraph,
     std::ostream& output) {
@@ -49,15 +61,11 @@ void WriteResourceGraph(
            << "    \"maximumDepth\": " << resourceGraph.maximumDepth << ",\n"
            << "    \"maximumResources\": "
            << resourceGraph.maximumResources << ",\n"
-           << "    \"searchRoots\": [";
+           << "    \"searchRoots\": ";
+    WritePathArray(resourceGraph.searchRoots, output, "      ");
 
-    for (std::size_t index = 0;
-         index < resourceGraph.searchRoots.size();
-         ++index) {
-        output << (index == 0 ? "\n" : ",\n") << "      ";
-        WriteEscaped(output, resourceGraph.searchRoots[index].string());
-    }
-    output << (resourceGraph.searchRoots.empty() ? "]" : "\n    ]");
+    output << ",\n    \"mountedVpks\": ";
+    WritePathArray(resourceGraph.mountedVpks, output, "      ");
 
     output << ",\n    \"nodes\": [";
     for (std::size_t index = 0;
@@ -82,9 +90,13 @@ void WriteResourceGraph(
         WriteEscaped(output, node.compiledRelativePath.string());
         output << ",\n        \"resolvedPath\": ";
         WriteEscaped(output, node.resolvedPath.string());
+        output << ",\n        \"vpkEntryPath\": ";
+        WriteEscaped(output, node.vpkEntryPath);
         output << ",\n        \"depth\": " << node.depth
                << ",\n        \"status\": ";
         WriteEscaped(output, graph::ToString(node.status));
+        output << ",\n        \"source\": ";
+        WriteEscaped(output, graph::ToString(node.source));
         output << ",\n        \"message\": ";
         WriteEscaped(output, node.message);
         output << ",\n        \"actualSize\": " << node.actualSize
@@ -127,6 +139,10 @@ void WriteResourceGraph(
            << statistics.depthLimitedReferences << ",\n"
            << "      \"resourcesLoaded\": "
            << statistics.resourcesLoaded << ",\n"
+           << "      \"resourcesLoadedLoose\": "
+           << statistics.resourcesLoadedLoose << ",\n"
+           << "      \"resourcesLoadedFromVpk\": "
+           << statistics.resourcesLoadedFromVpk << ",\n"
            << "      \"resourcesMissing\": "
            << statistics.resourcesMissing << ",\n"
            << "      \"resourcesFailed\": "

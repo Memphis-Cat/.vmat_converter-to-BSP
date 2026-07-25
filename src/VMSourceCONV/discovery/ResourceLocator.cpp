@@ -4,18 +4,17 @@
 
 #include <algorithm>
 #include <cctype>
+#include <stdexcept>
 #include <system_error>
 
 namespace vmsourceconv::discovery {
 namespace {
 
-[[nodiscard]] std::filesystem::path MakeAbsolute(const std::filesystem::path& path) {
+[[nodiscard]] std::filesystem::path MakeAbsolute(
+    const std::filesystem::path& path) {
     std::error_code error;
-    auto absolutePath = std::filesystem::absolute(path, error);
-    if (error) {
-        return path.lexically_normal();
-    }
-    return absolutePath.lexically_normal();
+    const auto absolutePath = std::filesystem::absolute(path, error);
+    return (error ? path : absolutePath).lexically_normal();
 }
 
 [[nodiscard]] bool SamePath(
@@ -45,7 +44,8 @@ namespace {
 
 ResourceLocator::ResourceLocator(
     const std::filesystem::path& input,
-    const std::vector<std::filesystem::path>& extraRoots) {
+    const std::vector<std::filesystem::path>& extraRoots,
+    const std::vector<std::filesystem::path>& explicitVpks) {
     for (const auto& root : extraRoots) {
         AddRoot(root);
     }
@@ -58,37 +58,87 @@ ResourceLocator::ResourceLocator(
     if (!error) {
         AddRoot(currentDirectory);
     }
+
+    for (const auto& path : explicitVpks) {
+        std::error_code pathError;
+        if (std::filesystem::is_directory(path, pathError) && !pathError) {
+            vpks_.Discover(path);
+        } else {
+            vpks_.Mount(path);
+        }
+    }
+
+    for (const auto& root : roots_) {
+        vpks_.Discover(root);
+    }
 }
 
-ResourceLocation ResourceLocator::Locate(const std::string_view logicalName) const {
+ResourceLocation ResourceLocator::Locate(
+    const std::string_view logicalName) const {
     ResourceLocation location;
     location.logicalName = NormalizeLogicalResourceName(logicalName);
 
     const auto compiledRelativePath = ToCompiledRelativePath(logicalName);
     if (!compiledRelativePath.has_value()) {
-        location.error = "resource path is empty, absolute, or contains parent traversal";
+        location.error =
+            "resource path is empty, absolute, or contains parent traversal";
         return location;
     }
 
     location.compiledRelativePath = *compiledRelativePath;
 
     for (const auto& root : roots_) {
-        const auto candidate = (root / location.compiledRelativePath).lexically_normal();
+        const auto candidate =
+            (root / location.compiledRelativePath).lexically_normal();
         location.candidates.push_back(candidate);
 
         std::error_code error;
         if (std::filesystem::is_regular_file(candidate, error) && !error) {
             location.resolvedPath = candidate;
+            location.source = ResourceSource::LooseFile;
             return location;
         }
     }
 
-    location.error = "compiled resource was not found in any search root";
+    const auto match = vpks_.Find(
+        location.compiledRelativePath.generic_string());
+    if (match.has_value()) {
+        location.vpkMatch = *match;
+        const auto mountedPaths = vpks_.MountedPaths();
+        location.resolvedPath = mountedPaths.at(match->archiveIndex);
+        location.source = ResourceSource::VpkArchive;
+        return location;
+    }
+
+    location.error =
+        "compiled resource was not found in loose roots or mounted VPKs";
     return location;
+}
+
+io::FileData ResourceLocator::Read(
+    const ResourceLocation& location) const {
+    switch (location.source) {
+        case ResourceSource::LooseFile:
+            return io::FileReader::ReadAll(location.resolvedPath);
+        case ResourceSource::VpkArchive:
+            return vpks_.Read(location.vpkMatch);
+        case ResourceSource::Missing:
+            break;
+    }
+
+    throw std::runtime_error("cannot read an unresolved resource");
 }
 
 const std::vector<std::filesystem::path>& ResourceLocator::SearchRoots() const noexcept {
     return roots_;
+}
+
+std::vector<std::filesystem::path> ResourceLocator::MountedVpks() const {
+    return vpks_.MountedPaths();
+}
+
+const std::vector<std::string>& ResourceLocator::VpkWarnings() const noexcept {
+    return vpks_.Warnings();
 }
 
 void ResourceLocator::AddRoot(const std::filesystem::path& root) {

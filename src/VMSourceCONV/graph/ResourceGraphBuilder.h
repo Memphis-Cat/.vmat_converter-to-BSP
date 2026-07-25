@@ -16,6 +16,7 @@ public:
         const std::filesystem::path& input,
         const std::vector<inspect::ExternalReference>& rootReferences,
         const std::vector<std::filesystem::path>& resourceRoots,
+        const std::vector<std::filesystem::path>& vpkPaths,
         bool includeAssets,
         std::size_t maximumDepth,
         std::size_t maximumResources,

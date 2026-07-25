@@ -1,7 +1,10 @@
 #include "cli/CommandLine.h"
 
+#include <algorithm>
 #include <charconv>
+#include <cctype>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <system_error>
 
@@ -42,6 +45,22 @@ bool ParseBoundedSize(
 
     output = static_cast<std::size_t>(parsed);
     return true;
+}
+
+bool EndsWithIgnoreCase(
+    const std::string_view value,
+    const std::string_view suffix) {
+    if (value.size() < suffix.size()) {
+        return false;
+    }
+
+    return std::equal(
+        suffix.rbegin(),
+        suffix.rend(),
+        value.rbegin(),
+        [](const unsigned char left, const unsigned char right) {
+            return std::tolower(left) == std::tolower(right);
+        });
 }
 
 } // namespace
@@ -101,6 +120,38 @@ ParsedCommandLine CommandLine::Parse(const int argc, char** argv) {
                 return result;
             }
             result.inspectOptions.resourceRoots.emplace_back(argv[++index]);
+            continue;
+        }
+
+        if (argument == "--vpk") {
+            if (!RequireValue(argc, index, result, "--vpk")) {
+                return result;
+            }
+            result.inspectOptions.vpkPaths.emplace_back(argv[++index]);
+            continue;
+        }
+
+        if (argument == "--log") {
+            if (!RequireValue(argc, index, result, "--log")) {
+                return result;
+            }
+            result.inspectOptions.logOutput = argv[++index];
+            continue;
+        }
+
+        constexpr std::string_view logPrefix = "--log=";
+        if (argument.size() > logPrefix.size()
+            && argument.substr(0, logPrefix.size()) == logPrefix) {
+            result.inspectOptions.logOutput =
+                std::string(argument.substr(logPrefix.size()));
+            continue;
+        }
+
+        if (argument.size() > 2
+            && argument.substr(0, 2) == "--"
+            && EndsWithIgnoreCase(argument, ".txt")) {
+            result.inspectOptions.logOutput =
+                std::string(argument.substr(2));
             continue;
         }
 

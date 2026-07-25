@@ -1,41 +1,16 @@
 # VMSourceCONV
 
-VMSourceCONV is a native C++ command-line project for inspecting and eventually converting compiled Source 2 maps into lossy Source 1 content.
+VMSourceCONV is a native C++17 command-line project for inspecting and eventually converting compiled Source 2 maps into lossy Source 1 content.
 
-## Current milestone: inspect and discover
-
-The inspector reads the generic Source 2 compiled-resource container used by files such as `.vmap_c`:
+## Current milestone: recursive inspect with native VPK reading
 
 ```text
-VMSourceCONV inspect <resource.vmap_c>
+VMSourceCONV inspect <resource.vmap_c> [options]
 ```
 
-It can also follow the map's loose compiled dependencies:
+The inspector reads Source 2 `_c` resource containers, decodes `RERL`, follows structural dependencies, and loads referenced resources from either loose files or Valve VPK packages. It does not invoke Workshop Tools or a third-party executable.
 
-```text
-VMSourceCONV inspect de_cache.vmap_c ^
-  --follow-references ^
-  --resource-root "C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\game\csgo" ^
-  --json de_cache-report.json
-```
-
-`--follow-references` follows structural map resources such as `.vrman`, `.vwrld`, `.vwnod`, `.vents`, `.vvis`, and world-physics resources. Add `--include-assets` to also inspect models, textures, materials, and other referenced assets.
-
-The current inspector:
-
-- reads the 16-byte Source 2 resource header;
-- resolves the relative block-directory offset;
-- enumerates and bounds-checks block entries;
-- validates declared size, header version, block ranges, and overlaps;
-- decodes `RERL` external resource references;
-- converts logical resource names such as `maps/de_cache/world.vwrld` into loose compiled paths such as `maps/de_cache/world.vwrld_c`;
-- searches explicit and inferred Source 2 content roots;
-- recursively inspects dependencies with cycle, depth, and resource-count protection;
-- reports loaded, missing, skipped, duplicate, and failed resources;
-- writes text and JSON reports;
-- optionally dumps each valid root-resource block.
-
-It does not read dependencies from VPK archives or decode `DATA`, KV3, world-node geometry, meshes, or entities yet.
+A map-package folder containing a root `.vmap_c` and adjacent numbered `.vpk` files can be passed directly as a resource root. VMSourceCONV scans adjacent `.vpk` files, mounts files that contain a valid VPK directory tree, and ignores raw split data chunks until an index references them.
 
 ## Build
 
@@ -44,17 +19,41 @@ cmake -S . -B build
 cmake --build build --config Release
 ```
 
-On Windows with a multi-configuration generator, the executable is usually under `build/src/VMSourceCONV/Release/`.
-
-## Useful commands
+The Windows executable is normally located at:
 
 ```text
-VMSourceCONV inspect de_cache.vmap_c
-VMSourceCONV inspect de_cache.vmap_c --follow-references --resource-root D:\cs2\game\csgo
-VMSourceCONV inspect de_cache.vmap_c --follow-references --max-depth 6 --max-resources 2000
-VMSourceCONV inspect de_cache.vmap_c --include-assets --resource-root D:\extracted_cs2
+build/src/VMSourceCONV/Release/VMSourceCONV.exe
 ```
 
-## Source SDK 2013
+## Inspect a map package
 
-The existing `external/source-sdk-2013` submodule remains separate. The inspect and discovery milestones have no SDK dependency because Source SDK 2013 describes the Source 1 target side, not the Source 2 compiled-resource input format.
+```text
+VMSourceCONV inspect de_cache.vmap_c --follow-references --resource-root D:\VMAT
+```
+
+Explicit VPK package paths or package directories can be mounted more than once:
+
+```text
+VMSourceCONV inspect de_cache.vmap_c --follow-references --vpk D:\cache-package
+VMSourceCONV inspect de_cache.vmap_c --follow-references --vpk D:\cs2\game\csgo\pak01_dir.vpk
+```
+
+## Logging
+
+All terminal output and errors can be copied to a text file while remaining visible:
+
+```text
+VMSourceCONV inspect de_cache.vmap_c --follow-references --log logs.txt
+VMSourceCONV inspect de_cache.vmap_c --follow-references --log=logs.txt
+VMSourceCONV inspect de_cache.vmap_c --follow-references --logs.txt
+```
+
+Normal shell redirection also works. In PowerShell, include the error stream when desired:
+
+```powershell
+& $exe inspect ".\de_cache.vmap_c" --follow-references > logs.txt 2>&1
+```
+
+## Current limits
+
+The VPK reader supports Valve VPK versions 1 and 2, preload bytes, embedded data, and numbered split archives. CRC verification, `DATA`/KV3 decoding, meshes, entities, materials, physics conversion, and Source 1 output remain later milestones.
