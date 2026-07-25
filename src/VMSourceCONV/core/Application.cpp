@@ -26,7 +26,7 @@ int Application::Run(const int argc, char** argv) const {
         }
 
         if (commandLine.showVersion) {
-            std::cout << "VMSourceCONV 0.4.0\n";
+            std::cout << "VMSourceCONV 0.5.0\n";
             return static_cast<int>(ExitCode::Success);
         }
 
