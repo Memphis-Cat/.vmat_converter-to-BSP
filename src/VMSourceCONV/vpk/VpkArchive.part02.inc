@@ -6,14 +6,12 @@ VpkVerificationReport VpkArchive::Verify(
     report.directoryEntries = entries_.size();
     report.duplicatePaths = duplicatePaths_.size();
 
-    if (!duplicatePaths_.empty()) {
-        for (const auto& path : duplicatePaths_) {
-            AddIssue(
-                report,
-                VpkVerificationSeverity::Error,
-                "DUPLICATE_PATH",
-                "duplicate internal path: " + path);
-        }
+    for (const auto& path : duplicatePaths_) {
+        AddIssue(
+            report,
+            VpkVerificationSeverity::Error,
+            "DUPLICATE_PATH",
+            "duplicate internal path: " + path);
     }
 
     std::set<std::uint16_t> referencedChunks;
@@ -37,10 +35,10 @@ VpkVerificationReport VpkArchive::Verify(
             continue;
         }
 
-        std::filesystem::path sourcePath;
-        std::uint64_t baseOffset = 0;
-        std::uint64_t dataLimit = 0;
         try {
+            std::filesystem::path sourcePath;
+            std::uint64_t baseOffset = 0U;
+            std::uint64_t dataLimit = 0U;
             if (entry.archiveIndex == DirectoryArchiveIndex) {
                 ++report.embeddedEntries;
                 sourcePath = directoryFile_;
@@ -161,8 +159,8 @@ VpkVerificationReport VpkArchive::Verify(
                         "ORPHAN_CHUNK",
                         "unreferenced package chunk: "
                             + iterator->path().string());
-                    const auto orphanPath =
-                        std::filesystem::absolute(iterator->path()).lexically_normal();
+                    const auto orphanPath = std::filesystem::absolute(
+                        iterator->path()).lexically_normal();
                     if (countedFiles.insert(orphanPath).second) {
                         report.totalPackageBytes = CheckedAdd(
                             report.totalPackageBytes,
@@ -184,13 +182,22 @@ VpkVerificationReport VpkArchive::Verify(
         stream.seekg(static_cast<std::streamoff>(sectionOffset));
         const auto recordCount =
             sections_.archiveMd5Size / ArchiveMd5RecordSize;
-        for (std::uint32_t record = 0; record < recordCount; ++record) {
+        for (std::uint32_t record = 0U; record < recordCount; ++record) {
             const auto archiveIndex32 = ReadU32(stream);
             const auto offset = ReadU32(stream);
             const auto length = ReadU32(stream);
             std::array<std::uint8_t, 16> digest{};
             ReadExact(stream, digest.data(), digest.size());
 
+            if (archiveIndex32 > std::numeric_limits<std::uint16_t>::max()
+                && archiveIndex32 != DirectoryArchiveIndex) {
+                AddIssue(
+                    report,
+                    VpkVerificationSeverity::Error,
+                    "MD5_ARCHIVE_INDEX_INVALID",
+                    "archive-MD5 record contains an invalid archive index");
+                continue;
+            }
             const auto sourcePath = archiveIndex32 == DirectoryArchiveIndex
                 ? directoryFile_
                 : ChunkPath(static_cast<std::uint16_t>(archiveIndex32));
@@ -235,10 +242,9 @@ std::uint64_t VpkArchive::EmbeddedDataOffset() const noexcept {
 
 std::uint64_t VpkArchive::EmbeddedDataLimit(
     const std::uint64_t fileSize) const noexcept {
-    if (version_ == 2U) {
-        return EmbeddedDataOffset() + sections_.fileDataSize;
-    }
-    return fileSize;
+    return version_ == 2U
+        ? EmbeddedDataOffset() + sections_.fileDataSize
+        : fileSize;
 }
 
 std::string VpkArchive::NormalizePath(const std::string_view path) {
@@ -246,8 +252,10 @@ std::string VpkArchive::NormalizePath(const std::string_view path) {
     normalized.reserve(path.size());
     bool leading = true;
     bool previousSeparator = false;
-    for (const unsigned char character : path) {
-        const auto separator = character == '\\' || character == '/';
+    for (const char rawCharacter : path) {
+        const auto character = static_cast<unsigned char>(rawCharacter);
+        const auto separator = character == static_cast<unsigned char>('\\')
+            || character == static_cast<unsigned char>('/');
         if (separator) {
             if (leading || previousSeparator) {
                 continue;

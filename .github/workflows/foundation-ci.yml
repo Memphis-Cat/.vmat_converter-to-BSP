@@ -31,6 +31,17 @@ jobs:
             echo "CC=gcc" >> "$GITHUB_ENV"
             echo "CXX=g++" >> "$GITHUB_ENV"
           fi
+      - name: Upload source snapshot
+        if: matrix.compiler == 'gcc'
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-source-${{ github.run_attempt }}
+          path: |
+            CMakeLists.txt
+            src
+            tests
+          if-no-files-found: error
+          retention-days: 7
       - name: Configure
         run: >-
           cmake -S . -B build
