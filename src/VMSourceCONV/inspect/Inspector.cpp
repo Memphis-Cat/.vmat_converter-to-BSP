@@ -2,6 +2,7 @@
 
 #include "graph/ResourceGraphBuilder.h"
 #include "inspect/RerlInspector.h"
+#include "inspect/data/DataBlockInspector.h"
 #include "io/FileReader.h"
 #include "resource/ResourceParser.h"
 
@@ -13,6 +14,11 @@ InspectionReport Inspector::Run(const InspectOptions& options) const {
     report.document = resource::ResourceParser{}.Parse(
         std::move(file),
         report.diagnostics);
+
+    if (options.inspectData) {
+        report.dataInspection = data::DataBlockInspector{}.Inspect(
+            report.document);
+    }
 
     if (options.inspectExternalReferences) {
         report.externalReferences = RerlInspector{}.Inspect(
@@ -27,6 +33,7 @@ InspectionReport Inspector::Run(const InspectOptions& options) const {
             options.resourceRoots,
             options.vpkPaths,
             options.includeAssets,
+            options.inspectData,
             options.maximumDepth,
             options.maximumResources,
             report.diagnostics);
