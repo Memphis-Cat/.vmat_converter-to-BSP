@@ -2,6 +2,7 @@
 
 #include "core/Diagnostic.h"
 #include "graph/ResourceGraph.h"
+#include "inspect/data/DataInspectionResult.h"
 #include "resource/ResourceDocument.h"
 
 #include <cstddef>
@@ -20,6 +21,7 @@ struct ExternalReference {
 
 struct InspectionReport {
     resource::ResourceDocument document;
+    data::DataInspectionResult dataInspection;
     std::vector<ExternalReference> externalReferences;
     graph::ResourceGraph resourceGraph;
     std::vector<core::Diagnostic> diagnostics;
