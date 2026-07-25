@@ -4,10 +4,22 @@
 #include <cctype>
 #include <fstream>
 #include <stdexcept>
+#include <string>
 #include <system_error>
 
 namespace vmsourceconv::vpk {
 namespace {
+
+std::string Lowercase(std::string value) {
+    std::transform(
+        value.begin(),
+        value.end(),
+        value.begin(),
+        [](const unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+    return value;
+}
 
 bool EndsWithIgnoreCase(
     const std::string& value,
@@ -23,6 +35,26 @@ bool EndsWithIgnoreCase(
         [](const unsigned char left, const unsigned char right) {
             return std::tolower(left) == std::tolower(right);
         });
+}
+
+bool IsVpkCandidate(const std::filesystem::path& path) {
+    return EndsWithIgnoreCase(path.filename().string(), ".vpk");
+}
+
+int DiscoveryPriority(const std::filesystem::path& path) {
+    const auto name = Lowercase(path.filename().string());
+    if (name == "pak01_dir.vpk" || name == "pak1_dir.vpk") {
+        return 0;
+    }
+    if (name.size() >= 8U
+        && name.rfind("pak", 0) == 0
+        && EndsWithIgnoreCase(name, "_dir.vpk")) {
+        return 1;
+    }
+    if (EndsWithIgnoreCase(name, "_dir.vpk")) {
+        return 2;
+    }
+    return 3;
 }
 
 bool HasVpkMagic(const std::filesystem::path& path) {
@@ -62,7 +94,7 @@ void VpkRepository::Discover(const std::filesystem::path& root) {
     std::error_code error;
 
     if (std::filesystem::is_regular_file(root, error) && !error) {
-        if (EndsWithIgnoreCase(root.filename().string(), ".vpk")) {
+        if (IsVpkCandidate(root)) {
             (void)TryMount(root);
         }
         return;
@@ -74,22 +106,45 @@ void VpkRepository::Discover(const std::filesystem::path& root) {
     }
 
     std::vector<std::filesystem::path> candidates;
-    for (std::filesystem::directory_iterator iterator(root, error), end;
-         !error && iterator != end;
-         iterator.increment(error)) {
-        std::error_code entryError;
-        if (!iterator->is_regular_file(entryError) || entryError) {
+    const auto options =
+        std::filesystem::directory_options::skip_permission_denied;
+    std::filesystem::recursive_directory_iterator iterator(
+        root,
+        options,
+        error);
+    const std::filesystem::recursive_directory_iterator end;
+
+    while (iterator != end) {
+        if (error) {
+            error.clear();
+            iterator.increment(error);
             continue;
         }
 
-        if (EndsWithIgnoreCase(
-                iterator->path().filename().string(),
-                ".vpk")) {
+        std::error_code entryError;
+        if (iterator->is_regular_file(entryError)
+            && !entryError
+            && IsVpkCandidate(iterator->path())) {
             candidates.push_back(iterator->path());
         }
+
+        iterator.increment(error);
     }
 
-    std::sort(candidates.begin(), candidates.end());
+    std::sort(
+        candidates.begin(),
+        candidates.end(),
+        [](const std::filesystem::path& left,
+           const std::filesystem::path& right) {
+            const auto leftPriority = DiscoveryPriority(left);
+            const auto rightPriority = DiscoveryPriority(right);
+            if (leftPriority != rightPriority) {
+                return leftPriority < rightPriority;
+            }
+            return Lowercase(left.generic_string())
+                < Lowercase(right.generic_string());
+        });
+
     for (const auto& candidate : candidates) {
         (void)TryMount(candidate);
     }
@@ -151,8 +206,7 @@ bool VpkRepository::TryMount(const std::filesystem::path& path) {
         return true;
     }
 
-    // Split data chunks normally do not contain the VPK directory header.
-    // Ignore them silently while scanning a map-package folder.
+    // Raw numbered split chunks normally do not contain a VPK tree.
     if (!HasVpkMagic(normalized)) {
         return false;
     }
