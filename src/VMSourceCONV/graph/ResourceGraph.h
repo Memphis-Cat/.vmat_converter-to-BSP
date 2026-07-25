@@ -1,5 +1,7 @@
 #pragma once
 
+#include "inspect/data/DataInspectionResult.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -49,6 +51,7 @@ struct ResourceGraphNode {
     std::uint16_t headerVersion = 0;
     std::uint16_t resourceVersion = 0;
     std::vector<ResourceBlockSummary> blocks;
+    inspect::data::DataInspectionResult dataInspection;
     std::size_t externalReferenceCount = 0;
     std::size_t warningCount = 0;
     std::size_t errorCount = 0;
