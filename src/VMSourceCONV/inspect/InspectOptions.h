@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 namespace vmsourceconv::inspect {
@@ -12,6 +13,9 @@ struct InspectOptions {
     std::filesystem::path dumpDirectory;
     std::filesystem::path logOutput;
     std::filesystem::path entitiesJsonOutput;
+    std::filesystem::path kv3JsonDirectory;
+    std::filesystem::path sceneJsonOutput;
+    std::vector<std::string> kv3Filters;
     std::vector<std::filesystem::path> resourceRoots;
     std::vector<std::filesystem::path> vpkPaths;
     std::size_t maximumDepth = 4;
@@ -22,6 +26,7 @@ struct InspectOptions {
     bool inspectData = false;
     bool decodeKv3 = false;
     bool decodeEntityLumps = false;
+    bool reconstructScene = false;
     bool strict = false;
 };
 

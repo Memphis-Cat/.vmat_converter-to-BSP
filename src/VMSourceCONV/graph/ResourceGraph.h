@@ -71,6 +71,7 @@ struct ResourceGraphNode {
     std::vector<ResourceBlockSummary> blocks;
     inspect::data::DataInspectionResult dataInspection;
     Kv3DecodeSummary kv3Decode;
+    std::filesystem::path kv3JsonPath;
     std::shared_ptr<serialization::kv3::Kv3Document> kv3Document;
     std::size_t externalReferenceCount = 0;
     std::size_t warningCount = 0;
@@ -89,7 +90,9 @@ struct ResourceGraphStatistics {
     std::size_t resourcesFailed = 0;
     std::size_t kv3DocumentsDecoded = 0;
     std::size_t kv3DocumentsFailed = 0;
+    std::size_t kv3DocumentsExported = 0;
     std::size_t entityDocumentsRetained = 0;
+    std::size_t sceneDocumentsRetained = 0;
     bool resourceLimitReached = false;
 };
 

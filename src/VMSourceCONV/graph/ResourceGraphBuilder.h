@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 namespace vmsourceconv::graph {
@@ -19,6 +20,11 @@ public:
         const std::vector<std::filesystem::path>& vpkPaths,
         bool includeAssets,
         bool inspectData,
+        bool decodeKv3,
+        bool decodeEntityLumps,
+        bool reconstructScene,
+        const std::filesystem::path& kv3JsonDirectory,
+        const std::vector<std::string>& kv3Filters,
         std::size_t maximumDepth,
         std::size_t maximumResources,
         std::vector<core::Diagnostic>& diagnostics) const;

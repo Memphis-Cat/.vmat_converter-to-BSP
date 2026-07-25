@@ -1,14 +1,22 @@
 #pragma once
 
 #include "core/Diagnostic.h"
+#include "entities/EntityLumpExport.h"
 #include "graph/ResourceGraph.h"
 #include "inspect/data/DataInspectionResult.h"
 #include "resource/ResourceDocument.h"
+#include "scene/WorldScene.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
+
+namespace vmsourceconv::serialization::kv3 {
+struct Kv3Document;
+}
 
 namespace vmsourceconv::inspect {
 
@@ -22,8 +30,13 @@ struct ExternalReference {
 struct InspectionReport {
     resource::ResourceDocument document;
     data::DataInspectionResult dataInspection;
+    graph::Kv3DecodeSummary rootKv3Decode;
+    std::filesystem::path rootKv3JsonPath;
+    std::shared_ptr<serialization::kv3::Kv3Document> rootKv3Document;
     std::vector<ExternalReference> externalReferences;
     graph::ResourceGraph resourceGraph;
+    std::vector<entities::EntityLumpExport> entityLumps;
+    scene::WorldScene worldScene;
     std::vector<core::Diagnostic> diagnostics;
 
     [[nodiscard]] std::size_t WarningCount() const noexcept;

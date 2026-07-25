@@ -2,10 +2,12 @@
 
 #include "core/LogSession.h"
 #include "core/ParseError.h"
+#include "entities/EntityLumpJsonWriter.h"
 #include "inspect/BlockDumper.h"
 #include "inspect/Inspector.h"
 #include "inspect/JsonReportWriter.h"
 #include "inspect/TextReportWriter.h"
+#include "scene/WorldSceneJsonWriter.h"
 
 #include <filesystem>
 #include <iostream>
@@ -26,7 +28,20 @@ core::ExitCode InspectCommand::Execute(const InspectOptions& options) const {
         if (!options.jsonOutput.empty()) {
             JsonReportWriter{}.WriteFile(report, options.jsonOutput);
         }
-
+        if (!options.entitiesJsonOutput.empty()) {
+            entities::EntityLumpJsonWriter{}.WriteFile(
+                report.entityLumps,
+                options.entitiesJsonOutput);
+            std::cout << "Entity JSON: "
+                      << options.entitiesJsonOutput.string() << '\n';
+        }
+        if (!options.sceneJsonOutput.empty()) {
+            scene::WorldSceneJsonWriter{}.WriteFile(
+                report.worldScene,
+                options.sceneJsonOutput);
+            std::cout << "Scene JSON: "
+                      << options.sceneJsonOutput.string() << '\n';
+        }
         if (!options.dumpDirectory.empty()) {
             BlockDumper{}.Dump(report.document, options.dumpDirectory);
         }

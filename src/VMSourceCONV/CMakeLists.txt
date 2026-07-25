@@ -55,6 +55,7 @@ set(VMSOURCECONV_SOURCES
     serialization/kv3/BinaryKv3Magic.cpp
     serialization/kv3/Kv3Buffer.cpp
     serialization/kv3/Kv3Compression.cpp
+    serialization/kv3/Kv3DocumentExporter.cpp
     serialization/kv3/Kv3JsonWriter.cpp
     serialization/kv3/Kv3NodeType.cpp
     serialization/kv3/Kv3PayloadDecoder.cpp
@@ -62,6 +63,10 @@ set(VMSOURCECONV_SOURCES
 
     entities/EntityLumpExport.cpp
     entities/EntityLumpJsonWriter.cpp
+
+    scene/WorldScene.cpp
+    scene/WorldSceneExtractor.cpp
+    scene/WorldSceneJsonWriter.cpp
 
     analyzing/AnalysisStage.cpp
     decision/DecisionStage.cpp

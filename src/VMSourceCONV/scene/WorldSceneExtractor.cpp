@@ -1,0 +1,5 @@
+#include "scene/WorldSceneExtractor.part00.inc"
+#include "scene/WorldSceneExtractor.part01.inc"
+#include "scene/WorldSceneExtractor.part02.inc"
+#include "scene/WorldSceneExtractor.part03.inc"
+#include "scene/WorldSceneExtractor.part04.inc"
