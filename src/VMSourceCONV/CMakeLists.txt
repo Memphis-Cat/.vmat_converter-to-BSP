@@ -20,6 +20,7 @@ set(VMSOURCECONV_SOURCES
     compression/ZstdDecoder.cpp
 
     discovery/CompiledResourcePath.cpp
+    discovery/ResourceIdentity.cpp
     discovery/ResourceLocator.cpp
     discovery/VpkSearchPolicy.cpp
 
