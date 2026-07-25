@@ -38,7 +38,18 @@ jobs:
           -DBUILD_TESTING=ON
           -DVMSOURCECONV_WARNINGS_AS_ERRORS=ON
       - name: Build
-        run: cmake --build build --config Release --parallel 2
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build --config Release --parallel 2 2>&1 | tee "build-${{ matrix.compiler }}.log"
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.compiler }}-${{ github.run_attempt }}
+          path: build-${{ matrix.compiler }}.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
 
@@ -53,6 +64,17 @@ jobs:
           -DBUILD_TESTING=ON
           -DVMSOURCECONV_WARNINGS_AS_ERRORS=ON
       - name: Build
-        run: cmake --build build --config Release --parallel 2
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel 2 2>&1 | Tee-Object -FilePath build-msvc.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-msvc-${{ github.run_attempt }}
+          path: build-msvc.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
