@@ -4,7 +4,16 @@
                << '\n'
                << "Maximum depth: " << resourceGraph.maximumDepth << '\n'
                << "Maximum resources: " << resourceGraph.maximumResources << '\n'
-               << "Search roots:\n";
+               << "Maximum graph bytes: " << resourceGraph.maximumGraphBytes << '\n'
+               << "Override roots:\n";
+        if (resourceGraph.overrideRoots.empty()) {
+            output << "  (none)\n";
+        } else {
+            for (const auto& root : resourceGraph.overrideRoots) {
+                output << "  " << root.string() << '\n';
+            }
+        }
+        output << "Search roots:\n";
         for (const auto& root : resourceGraph.searchRoots) {
             output << "  " << root.string() << '\n';
         }
@@ -25,6 +34,7 @@
                 output << '[' << node.index << "] depth=" << node.depth
                        << " status=" << graph::ToString(node.status)
                        << " source=" << graph::ToString(node.source)
+                       << " tier=" << node.lookupTier
                        << ' ' << node.logicalName;
                 if (node.source == graph::ResourceNodeSource::LooseFile) {
                     output << "\n    file=" << node.resolvedPath.string();
@@ -45,7 +55,10 @@
                     }
                 }
                 if (node.parentIndex.has_value()) {
-                    output << "    parent=" << *node.parentIndex << '\n';
+                    output << "    first-parent=" << *node.parentIndex << '\n';
+                }
+                for (const auto& shadowed : node.shadowedVpks) {
+                    output << "    shadowed-vpk=" << shadowed.string() << '\n';
                 }
                 if (!node.message.empty()) {
                     output << "    message=" << node.message << '\n';
@@ -53,23 +66,72 @@
             }
         }
 
+        output << "\nDependency edges:\n";
+        if (resourceGraph.edges.empty()) {
+            output << "(none)\n";
+        } else {
+            for (const auto& edge : resourceGraph.edges) {
+                output << '[' << edge.sourceNode << "] -> ";
+                if (edge.targetNode.has_value()) {
+                    output << '[' << *edge.targetNode << ']';
+                } else {
+                    output << "(unresolved)";
+                }
+                output << " disposition=" << graph::ToString(edge.disposition)
+                       << " id=0x" << std::hex << edge.referenceId << std::dec
+                       << ' ' << edge.logicalName << '\n';
+                if (!edge.message.empty()) {
+                    output << "    " << edge.message << '\n';
+                }
+            }
+        }
+
+        if (!resourceGraph.vpkCollisions.empty()) {
+            output << "\nVPK collisions:\n";
+            for (const auto& collision : resourceGraph.vpkCollisions) {
+                output << collision.logicalName
+                       << " selected=" << collision.selectedPath.string()
+                       << " tier=" << collision.selectedTier << '\n';
+                for (const auto& shadowed : collision.shadowedPaths) {
+                    output << "    shadowed=" << shadowed.string() << '\n';
+                }
+            }
+        }
+
         output << "\nGraph summary:\n"
                << "  references seen: " << statistics.referencesSeen << '\n'
                << "  references skipped: " << statistics.referencesSkipped << '\n'
-               << "  duplicate references: " << statistics.duplicateReferences << '\n'
-               << "  depth-limited references: " << statistics.depthLimitedReferences << '\n'
+               << "  repeated edges: " << statistics.repeatedEdges << '\n'
+               << "  cycle edges: " << statistics.cycleEdges << '\n'
+               << "  self references: " << statistics.selfReferences << '\n'
+               << "  invalid references: " << statistics.invalidReferences << '\n'
+               << "  RERL identity conflicts: "
+               << statistics.referenceIdentityConflicts << '\n'
+               << "  VPK collisions: " << statistics.vpkCollisionCount << '\n'
+               << "  depth-limited references: "
+               << statistics.depthLimitedReferences << '\n'
                << "  resources loaded: " << statistics.resourcesLoaded << '\n'
-               << "  loaded from loose files: " << statistics.resourcesLoadedLoose << '\n'
-               << "  loaded from VPKs: " << statistics.resourcesLoadedFromVpk << '\n'
+               << "  loaded from loose files: "
+               << statistics.resourcesLoadedLoose << '\n'
+               << "  loaded from VPKs: "
+               << statistics.resourcesLoadedFromVpk << '\n'
                << "  resources missing: " << statistics.resourcesMissing << '\n'
                << "  resources failed: " << statistics.resourcesFailed << '\n'
-               << "  KV3 documents decoded: " << statistics.kv3DocumentsDecoded << '\n'
-               << "  KV3 documents failed: " << statistics.kv3DocumentsFailed << '\n'
-               << "  KV3 documents exported: " << statistics.kv3DocumentsExported << '\n'
-               << "  entity documents retained: " << statistics.entityDocumentsRetained << '\n'
-               << "  scene documents retained: " << statistics.sceneDocumentsRetained << '\n'
+               << "  total bytes loaded: " << statistics.totalBytesLoaded << '\n'
+               << "  KV3 documents decoded: "
+               << statistics.kv3DocumentsDecoded << '\n'
+               << "  KV3 documents failed: "
+               << statistics.kv3DocumentsFailed << '\n'
+               << "  KV3 documents exported: "
+               << statistics.kv3DocumentsExported << '\n'
+               << "  entity documents retained: "
+               << statistics.entityDocumentsRetained << '\n'
+               << "  scene documents retained: "
+               << statistics.sceneDocumentsRetained << '\n'
                << "  resource limit reached: "
-               << (statistics.resourceLimitReached ? "yes" : "no") << '\n';
+               << (statistics.resourceLimitReached ? "yes" : "no") << '\n'
+               << "  graph byte limit reached: "
+               << (statistics.graphByteLimitReached ? "yes" : "no") << '\n';
     }
 
     if (report.worldScene.enabled) {

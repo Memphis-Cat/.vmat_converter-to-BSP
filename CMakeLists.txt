@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
-project(VMSourceCONV VERSION 0.7.0 LANGUAGES C CXX)
+project(VMSourceCONV VERSION 0.8.0 LANGUAGES C CXX)
 
 option(VMSOURCECONV_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
+include(CTest)
 include(FetchContent)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -39,3 +40,7 @@ add_library(vmsourceconv_compression INTERFACE)
 target_link_libraries(vmsourceconv_compression INTERFACE lz4_static libzstd_static)
 
 add_subdirectory(src/VMSourceCONV)
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

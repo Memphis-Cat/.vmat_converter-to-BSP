@@ -1,12 +1,11 @@
-set(VMSOURCECONV_SOURCES
-    main.cpp
-
+set(VMSOURCECONV_CORE_SOURCES
     cli/CommandLine.cpp
     cli/CommandRouter.cpp
     cli/Usage.cpp
 
     core/Application.cpp
     core/Diagnostic.cpp
+    core/LogOptions.cpp
     core/LogSession.cpp
     core/ParseError.cpp
     core/TeeStreamBuf.cpp
@@ -20,11 +19,14 @@ set(VMSOURCECONV_SOURCES
     compression/ZstdDecoder.cpp
 
     discovery/CompiledResourcePath.cpp
+    discovery/ResourceIdentity.cpp
     discovery/ResourceLocator.cpp
     discovery/VpkSearchPolicy.cpp
 
+    vpk/Crc32.cpp
     vpk/VpkArchive.cpp
     vpk/VpkRepository.cpp
+    vpk/VpkVerification.cpp
 
     resource/FourCC.cpp
     resource/RelativeOffset.cpp
@@ -68,6 +70,9 @@ set(VMSOURCECONV_SOURCES
     scene/WorldSceneExtractor.cpp
     scene/WorldSceneJsonWriter.cpp
 
+    verify/VerifyVpkCommand.cpp
+    verify/VerifyVpkReportWriter.cpp
+
     analyzing/AnalysisStage.cpp
     decision/DecisionStage.cpp
     convert/ConversionStage.cpp
@@ -76,19 +81,34 @@ set(VMSOURCECONV_SOURCES
     repair/RepairStage.cpp
 )
 
-add_executable(VMSourceCONV ${VMSOURCECONV_SOURCES})
-target_compile_features(VMSourceCONV PRIVATE cxx_std_17)
-target_include_directories(VMSourceCONV PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(VMSourceCONV PRIVATE vmsourceconv_compression)
+function(vmsourceconv_apply_warnings target_name)
+    if(MSVC)
+        target_compile_options(${target_name} PRIVATE /W4 /permissive- /EHsc)
+        if(VMSOURCECONV_WARNINGS_AS_ERRORS)
+            target_compile_options(${target_name} PRIVATE /WX)
+        endif()
+    else()
+        target_compile_options(${target_name} PRIVATE
+            -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            # Clang folds signed-char range conversion into -Wconversion,
+            # unlike GCC. These loops immediately cast to unsigned char before
+            # ctype/byte processing, so align the two compiler warning sets.
+            target_compile_options(${target_name} PRIVATE -Wno-sign-conversion)
+        endif()
+        if(VMSOURCECONV_WARNINGS_AS_ERRORS)
+            target_compile_options(${target_name} PRIVATE -Werror)
+        endif()
+    endif()
+endfunction()
 
-if(MSVC)
-    target_compile_options(VMSourceCONV PRIVATE /W4 /permissive- /EHsc)
-    if(VMSOURCECONV_WARNINGS_AS_ERRORS)
-        target_compile_options(VMSourceCONV PRIVATE /WX)
-    endif()
-else()
-    target_compile_options(VMSourceCONV PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-    if(VMSOURCECONV_WARNINGS_AS_ERRORS)
-        target_compile_options(VMSourceCONV PRIVATE -Werror)
-    endif()
-endif()
+add_library(vmsourceconv_core STATIC ${VMSOURCECONV_CORE_SOURCES})
+target_compile_features(vmsourceconv_core PUBLIC cxx_std_17)
+target_include_directories(vmsourceconv_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(vmsourceconv_core PUBLIC vmsourceconv_compression)
+vmsourceconv_apply_warnings(vmsourceconv_core)
+
+add_executable(VMSourceCONV main.cpp)
+target_compile_features(VMSourceCONV PRIVATE cxx_std_17)
+target_link_libraries(VMSourceCONV PRIVATE vmsourceconv_core)
+vmsourceconv_apply_warnings(VMSourceCONV)

@@ -1,12 +1,18 @@
 #pragma once
 
 #include <streambuf>
+#include <string>
 
 namespace vmsourceconv::core {
 
 class TeeStreamBuf final : public std::streambuf {
 public:
-    TeeStreamBuf(std::streambuf* first, std::streambuf* second);
+    TeeStreamBuf(
+        std::streambuf* console,
+        std::streambuf* log,
+        std::string severity,
+        bool timestamps,
+        bool flushLogOnLine);
 
 protected:
     int overflow(int character) override;
@@ -14,8 +20,15 @@ protected:
     int sync() override;
 
 private:
-    std::streambuf* first_;
-    std::streambuf* second_;
+    bool WriteLogCharacter(char value);
+    bool WriteLogPrefix();
+
+    std::streambuf* console_;
+    std::streambuf* log_;
+    std::string severity_;
+    bool timestamps_ = true;
+    bool flushLogOnLine_ = false;
+    bool logLineStart_ = true;
 };
 
 } // namespace vmsourceconv::core
