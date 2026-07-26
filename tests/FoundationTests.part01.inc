@@ -5,6 +5,7 @@ struct VpkFixtureOptions {
     bool writeChunk = true;
     bool wrongCrc = false;
     bool duplicatePath = false;
+    bool source2SignatureDescriptor = false;
 };
 
 std::filesystem::path ChunkPathFor(
@@ -25,6 +26,7 @@ void WriteSingleVpk(
     const VpkFixtureOptions& options = {}) {
     CHECK(options.version == 1U || options.version == 2U);
     CHECK(options.preloadBytes <= data.size());
+    CHECK(!options.source2SignatureDescriptor || options.version == 2U);
 
     const auto slash = entryPath.find_last_of('/');
     const auto dot = entryPath.find_last_of('.');
@@ -77,7 +79,9 @@ void WriteSingleVpk(
             options.embedded ? static_cast<std::uint32_t>(archiveLength) : 0U);
         AppendU32(directoryBytes, 0U);
         AppendU32(directoryBytes, 0U);
-        AppendU32(directoryBytes, 0U);
+        AppendU32(
+            directoryBytes,
+            options.source2SignatureDescriptor ? 20U : 0U);
     }
     directoryBytes.insert(directoryBytes.end(), tree.begin(), tree.end());
     if (options.embedded) {
@@ -85,6 +89,17 @@ void WriteSingleVpk(
             directoryBytes.end(),
             data.begin() + static_cast<std::ptrdiff_t>(options.preloadBytes),
             data.end());
+    }
+    if (options.source2SignatureDescriptor) {
+        constexpr std::uint32_t PublicKeySize = 8U;
+        constexpr std::uint32_t SignatureSize = 16U;
+        AppendU32(directoryBytes, 0x55AA1234U);
+        AppendU32(directoryBytes, 1U);
+        AppendU32(directoryBytes, PublicKeySize);
+        AppendU32(directoryBytes, SignatureSize);
+        AppendU32(directoryBytes, 0U);
+        directoryBytes.insert(directoryBytes.end(), PublicKeySize, 0xA5U);
+        directoryBytes.insert(directoryBytes.end(), SignatureSize, 0x5AU);
     }
     WriteBytes(directoryFile, directoryBytes);
 
