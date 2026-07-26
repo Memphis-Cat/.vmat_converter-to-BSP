@@ -184,12 +184,17 @@ void VpkArchive::Parse() {
 }
 
 void VpkArchive::ValidateV2Sections(const std::uint64_t fileSize) const {
-    auto end = CheckedAdd(headerSize_, treeSize_, "VPK section overflow");
-    end = CheckedAdd(end, sections_.fileDataSize, "VPK section overflow");
-    end = CheckedAdd(end, sections_.archiveMd5Size, "VPK section overflow");
-    end = CheckedAdd(end, sections_.otherMd5Size, "VPK section overflow");
-    end = CheckedAdd(end, sections_.signatureSize, "VPK section overflow");
-    if (end > fileSize) {
+    auto declaredEnd = CheckedAdd(
+        headerSize_, treeSize_, "VPK section overflow");
+    declaredEnd = CheckedAdd(
+        declaredEnd, sections_.fileDataSize, "VPK section overflow");
+    declaredEnd = CheckedAdd(
+        declaredEnd, sections_.archiveMd5Size, "VPK section overflow");
+    declaredEnd = CheckedAdd(
+        declaredEnd, sections_.otherMd5Size, "VPK section overflow");
+    declaredEnd = CheckedAdd(
+        declaredEnd, sections_.signatureSize, "VPK section overflow");
+    if (declaredEnd > fileSize) {
         throw std::runtime_error("VPK v2 sections extend beyond the file");
     }
     if (sections_.archiveMd5Size % ArchiveMd5RecordSize != 0U) {
@@ -201,22 +206,70 @@ void VpkArchive::ValidateV2Sections(const std::uint64_t fileSize) const {
             "VPK other-MD5 section must be empty or 48 bytes");
     }
 
-    if (sections_.signatureSize != 0U) {
-        const auto signatureOffset = end - sections_.signatureSize;
-        std::ifstream stream(directoryFile_, std::ios::binary);
-        stream.seekg(static_cast<std::streamoff>(signatureOffset));
+    if (sections_.signatureSize == 0U) {
+        return;
+    }
+    if (sections_.signatureSize < 4U) {
+        throw std::runtime_error("VPK signature section is too small");
+    }
+
+    const auto signatureOffset = declaredEnd - sections_.signatureSize;
+    if (signatureOffset > static_cast<std::uint64_t>(
+            std::numeric_limits<std::streamoff>::max())) {
+        throw std::runtime_error("VPK signature offset is too large");
+    }
+
+    std::ifstream stream(directoryFile_, std::ios::binary);
+    if (!stream) {
+        throw std::runtime_error(
+            "unable to open VPK signature section: " + directoryFile_.string());
+    }
+    stream.seekg(static_cast<std::streamoff>(signatureOffset));
+    if (!stream) {
+        throw std::runtime_error("unable to seek VPK signature section");
+    }
+
+    const auto firstValue = ReadU32(stream);
+
+    // Newer Source 2 packages use a fixed 20-byte descriptor. The descriptor
+    // stores the VPK magic, signature type, key length, signature length, and a
+    // reserved field. The key and signature payloads immediately follow the
+    // declared descriptor and are therefore outside SignatureSectionSize.
+    if (sections_.signatureSize == 20U && firstValue == VpkMagic) {
+        (void)ReadU32(stream); // signature type
         const auto publicKeySize = ReadU32(stream);
-        const auto afterKey = CheckedAdd(4U, publicKeySize, "VPK signature overflow");
-        if (afterKey + 4U > sections_.signatureSize) {
-            throw std::runtime_error("VPK signature public key is out of range");
-        }
-        stream.seekg(static_cast<std::streamoff>(publicKeySize), std::ios::cur);
         const auto signatureSize = ReadU32(stream);
-        const auto consumed = CheckedAdd(
-            afterKey + 4U, signatureSize, "VPK signature overflow");
-        if (consumed != sections_.signatureSize) {
+        (void)ReadU32(stream); // reserved
+
+        auto payloadEnd = CheckedAdd(
+            declaredEnd, publicKeySize, "VPK signature public-key overflow");
+        payloadEnd = CheckedAdd(
+            payloadEnd, signatureSize, "VPK signature payload overflow");
+        if (payloadEnd > fileSize) {
             throw std::runtime_error(
-                "VPK signature section sizes do not consume the section exactly");
+                "VPK Source 2 signature payload is out of range");
         }
+        return;
+    }
+
+    // Legacy VPK v2 signature framing keeps both payloads inside the declared
+    // signature section: [key length][key][signature length][signature].
+    const auto publicKeySize = firstValue;
+    const auto afterKey = CheckedAdd(
+        4U, publicKeySize, "VPK signature overflow");
+    if (afterKey > sections_.signatureSize
+        || sections_.signatureSize - afterKey < 4U) {
+        throw std::runtime_error("VPK signature public key is out of range");
+    }
+    stream.seekg(static_cast<std::streamoff>(publicKeySize), std::ios::cur);
+    if (!stream) {
+        throw std::runtime_error("unable to seek past VPK signature public key");
+    }
+    const auto signatureSize = ReadU32(stream);
+    const auto consumed = CheckedAdd(
+        afterKey + 4U, signatureSize, "VPK signature overflow");
+    if (consumed != sections_.signatureSize) {
+        throw std::runtime_error(
+            "VPK signature section sizes do not consume the section exactly");
     }
 }
