@@ -132,6 +132,27 @@ void TestLogging() {
     }
 }
 
+void TestSource2VpkSignatureDescriptor() {
+    TemporaryDirectory temporary;
+    const auto path = temporary.Path() / "source2-signed_dir.vpk";
+    const auto payload = std::vector<std::uint8_t>{
+        's', 'i', 'g', 'n', 'e', 'd',
+    };
+
+    VpkFixtureOptions options;
+    options.version = 2U;
+    options.source2SignatureDescriptor = true;
+    WriteSingleVpk(path, "maps/test/signed.bin", payload, options);
+
+    const vmsourceconv::vpk::VpkArchive archive(path);
+    CHECK(archive.Version() == 2U);
+    CHECK(archive.Sections().signatureSize == 20U);
+    const auto* entry = archive.Find("maps/test/signed.bin");
+    CHECK(entry != nullptr);
+    CHECK(archive.Read(*entry).bytes == payload);
+    CHECK(archive.Verify().Success());
+}
+
 using TestFunction = void (*)();
 
 struct NamedTest {
@@ -147,6 +168,7 @@ int main() {
         {"resource container validation", &TestResourceContainerValidation},
         {"file reader limits", &TestFileReaderLimits},
         {"VPK read and verification", &TestVpkReadAndVerification},
+        {"Source 2 VPK signature", &TestSource2VpkSignatureDescriptor},
         {"resource locator priority", &TestResourceLocatorPriorityAndCollisions},
         {"dependency graph", &TestDependencyGraph},
         {"command line", &TestCommandLine},
