@@ -38,6 +38,9 @@ jobs:
           name: foundation-source-${{ github.run_attempt }}
           path: |
             CMakeLists.txt
+            README.md
+            docs
+            .github
             src
             tests
           if-no-files-found: error
@@ -89,3 +92,51 @@ jobs:
           retention-days: 7
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Package VMSourceCONV 0.8.0
+        shell: pwsh
+        run: |
+          $package = "package/VMSourceCONV-0.8.0"
+          New-Item -ItemType Directory -Force -Path "$package/bin" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$package/source" | Out-Null
+
+          Copy-Item "build/src/VMSourceCONV/Release/VMSourceCONV.exe" "$package/bin/VMSourceCONV.exe"
+          Copy-Item "CMakeLists.txt" "$package/source/CMakeLists.txt"
+          Copy-Item "README.md" "$package/source/README.md"
+          Copy-Item "src" "$package/source/src" -Recurse
+          Copy-Item "tests" "$package/source/tests" -Recurse
+          Copy-Item "docs" "$package/source/docs" -Recurse
+          Copy-Item ".github" "$package/source/.github" -Recurse
+
+          @"
+          VMSourceCONV 0.8.0
+          Branch: agent/foundation-hardening
+          Commit: ${{ github.sha }}
+          CI run: ${{ github.run_id }}
+          Built with: MSVC Release, warnings as errors
+          Tests: VMSourceCONVFoundationTests passed
+          "@ | Set-Content -Encoding UTF8 "$package/VERSION.txt"
+
+          @"
+          Command Prompt build:
+            cmake -S source -B build -DBUILD_TESTING=ON
+            cmake --build build --config Release
+            ctest --test-dir build -C Release --output-on-failure
+
+          Version check:
+            bin\VMSourceCONV.exe --version
+
+          Foundation map test:
+            bin\VMSourceCONV.exe inspect de_cache.vmap_c --follow-references --resource-root D:\VMAT --report-vpk-collisions --foundation-de-cache.txt
+
+          VPK verification:
+            bin\VMSourceCONV.exe verify-vpk de_cache.vpk --json de-cache-vpk-verification.json --de-cache-vpk-verification.txt
+          "@ | Set-Content -Encoding UTF8 "$package/QUICKSTART.txt"
+
+          Compress-Archive -Path "$package" -DestinationPath "VMSourceCONV-0.8.0-windows-x64.zip" -CompressionLevel Optimal
+      - name: Upload VMSourceCONV 0.8.0 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: VMSourceCONV-0.8.0-windows-x64
+          path: VMSourceCONV-0.8.0-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30
