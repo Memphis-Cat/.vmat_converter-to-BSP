@@ -183,43 +183,56 @@ VpkVerificationReport VpkArchive::Verify(
         const auto recordCount =
             sections_.archiveMd5Size / ArchiveMd5RecordSize;
         for (std::uint32_t record = 0U; record < recordCount; ++record) {
-            const auto archiveIndex32 = ReadU32(stream);
+            auto archiveIndex = ReadU16(stream);
+            auto hashType = ReadU16(stream);
             const auto offset = ReadU32(stream);
             const auto length = ReadU32(stream);
             std::array<std::uint8_t, 16> digest{};
             ReadExact(stream, digest.data(), digest.size());
 
-            if (archiveIndex32 > std::numeric_limits<std::uint16_t>::max()
-                && archiveIndex32 != DirectoryArchiveIndex) {
+            // Newer Source 2 packages encode embedded-data hashes as archive
+            // index 0 with bit 15 set in the hash-type field. ValvePak maps
+            // this legacy marker to archive 0x7FFF using the MD5 algorithm.
+            if (archiveIndex == 0U && hashType == 0x8000U) {
+                archiveIndex = DirectoryArchiveIndex;
+                hashType = 0U;
+            }
+
+            if (hashType > 1U) {
                 AddIssue(
                     report,
                     VpkVerificationSeverity::Error,
-                    "MD5_ARCHIVE_INDEX_INVALID",
-                    "archive-MD5 record contains an invalid archive index");
+                    "ARCHIVE_HASH_TYPE_INVALID",
+                    "archive hash record contains an unsupported hash type "
+                        + std::to_string(hashType));
                 continue;
             }
-            const auto sourcePath = archiveIndex32 == DirectoryArchiveIndex
+
+            const auto sourcePath = archiveIndex == DirectoryArchiveIndex
                 ? directoryFile_
-                : ChunkPath(static_cast<std::uint16_t>(archiveIndex32));
+                : ChunkPath(archiveIndex);
             std::error_code error;
             if (!std::filesystem::is_regular_file(sourcePath, error) || error) {
                 AddIssue(
                     report,
                     VpkVerificationSeverity::Error,
                     "MD5_SOURCE_MISSING",
-                    "archive-MD5 record references missing data: "
+                    "archive hash record references missing data: "
                         + sourcePath.string());
                 continue;
             }
-            const auto sourceSize = GetFileSize(sourcePath);
+
+            const auto dataLimit = archiveIndex == DirectoryArchiveIndex
+                ? static_cast<std::uint64_t>(sections_.fileDataSize)
+                : GetFileSize(sourcePath);
             const auto endOffset = CheckedAdd(
-                offset, length, "VPK archive-MD5 range overflow");
-            if (endOffset > sourceSize) {
+                offset, length, "VPK archive-hash range overflow");
+            if (endOffset > dataLimit) {
                 AddIssue(
                     report,
                     VpkVerificationSeverity::Error,
                     "MD5_RANGE_INVALID",
-                    "archive-MD5 record is outside " + sourcePath.string());
+                    "archive hash record is outside " + sourcePath.string());
             }
         }
     }
