@@ -153,6 +153,51 @@ void TestSource2VpkSignatureDescriptor() {
     CHECK(archive.Verify().Success());
 }
 
+void TestSource2ArchiveHashRecord() {
+    TemporaryDirectory temporary;
+    const auto path = temporary.Path() / "source2-hash_dir.vpk";
+    const auto payload = std::vector<std::uint8_t>{'h', 'a', 's', 'h'};
+
+    std::vector<std::uint8_t> tree;
+    AppendCString(tree, "bin");
+    AppendCString(tree, "maps/test");
+    AppendCString(tree, "source2-hash");
+    AppendU32(tree, vmsourceconv::vpk::ComputeCrc32(payload));
+    AppendU16(tree, 0U);
+    AppendU16(tree, 0x7FFFU);
+    AppendU32(tree, 0U);
+    AppendU32(tree, static_cast<std::uint32_t>(payload.size()));
+    AppendU16(tree, 0xFFFFU);
+    AppendCString(tree, "");
+    AppendCString(tree, "");
+    AppendCString(tree, "");
+
+    std::vector<std::uint8_t> archiveHash;
+    AppendU16(archiveHash, 0U);
+    AppendU16(archiveHash, 0x8000U);
+    AppendU32(archiveHash, 0U);
+    AppendU32(archiveHash, static_cast<std::uint32_t>(payload.size()));
+    archiveHash.insert(archiveHash.end(), 16U, 0U);
+
+    std::vector<std::uint8_t> bytes;
+    AppendU32(bytes, 0x55AA1234U);
+    AppendU32(bytes, 2U);
+    AppendU32(bytes, static_cast<std::uint32_t>(tree.size()));
+    AppendU32(bytes, static_cast<std::uint32_t>(payload.size()));
+    AppendU32(bytes, static_cast<std::uint32_t>(archiveHash.size()));
+    AppendU32(bytes, 0U);
+    AppendU32(bytes, 0U);
+    bytes.insert(bytes.end(), tree.begin(), tree.end());
+    bytes.insert(bytes.end(), payload.begin(), payload.end());
+    bytes.insert(bytes.end(), archiveHash.begin(), archiveHash.end());
+    WriteBytes(path, bytes);
+
+    const vmsourceconv::vpk::VpkArchive archive(path);
+    CHECK(archive.Version() == 2U);
+    CHECK(archive.Sections().archiveMd5Size == 28U);
+    CHECK(archive.Verify().Success());
+}
+
 using TestFunction = void (*)();
 
 struct NamedTest {
@@ -169,6 +214,7 @@ int main() {
         {"file reader limits", &TestFileReaderLimits},
         {"VPK read and verification", &TestVpkReadAndVerification},
         {"Source 2 VPK signature", &TestSource2VpkSignatureDescriptor},
+        {"Source 2 VPK archive hash", &TestSource2ArchiveHashRecord},
         {"resource locator priority", &TestResourceLocatorPriorityAndCollisions},
         {"dependency graph", &TestDependencyGraph},
         {"command line", &TestCommandLine},
